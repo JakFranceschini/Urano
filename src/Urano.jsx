@@ -329,6 +329,7 @@ function LogoAtivo({ ticker, size = 72 }) {
 // ── Âncoras de navegação ──────────────────────────────────────────────────────
 const ANCORAS = [
   { id: "sec-patrimonio", label: "Patrimônio" },
+  { id: "sec-patrimonio-dolar", label: "Patrimônio USD" },
   { id: "sec-evolucao",   label: "Evolução"   },
   { id: "sec-alocacao",   label: "Alocação"   },
   { id: "sec-aporte",     label: "Aporte"     },
@@ -677,6 +678,67 @@ function CardPatrimonio({ totais, proventos }) {
         <SubCard><AnimatedValue titulo="Total Aportado"            rawValue={aportado} formatter={fmtBRL} /></SubCard>
         <SubCard><AnimatedValue titulo="Variação Com Dividendos"   rawValue={diffDiv}  formatter={v => `${sinal(v)}${fmtBRL(v)}`}    cor={corVar(diffDiv)} /></SubCard>
         <SubCard><AnimatedValue titulo="Variação % Com Dividendos" rawValue={percDiv}  formatter={v => `${sinal(v)}${v.toFixed(2)}%`} cor={corVar(percDiv)} /></SubCard>
+      </div>
+    </Card>
+  );
+}
+
+// ── Card Patrimônio em Dólar ──────────────────────────────────────────────────
+
+function CardPatrimonioDolar({ totais, reservas, ativos }) {
+  if (!totais?.length || totais.length < 2) return null;
+  const t = totais[1]; // segunda linha da aba totais (valores em dólar)
+
+  const total    = toFloat(t.total_patrimonio);
+  const stocks   = toFloat(t.total_stocks);
+  const reits    = toFloat(t.total_reits);
+  const acoes    = toFloat(t.total_acoes);
+  const fiis     = toFloat(t.total_fiis);
+  const bitcoins = toFloat(t.total_bitcoins);
+  const reserva  = reservas?.length > 1 ? toFloat(reservas[1].reserva_atual) : 0;
+
+  const moeda    = (ativos ?? []).find(a => String(a.classe).toLowerCase().trim() === "moeda");
+  const cotacaoUSD = moeda ? toFloat(moeda.cotacao) : 0;
+
+  return (
+    <Card>
+      <h2 className="card-titulo">Patrimônio em Dólar</h2>
+
+      <SubCard className="subcard-hero">
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+            <span className="campo-titulo" style={{ fontSize: 14, letterSpacing: "0.05em" }}>Patrimônio Atual (USD)</span>
+            <span
+              className="campo-valor animated-value"
+              style={{
+                opacity: total ? 1 : 0,
+                transform: total ? "translateY(0)" : "translateY(10px)",
+                transition: "opacity 0.55s cubic-bezier(0.22,1,0.36,1), transform 0.55s cubic-bezier(0.22,1,0.36,1)",
+                lineHeight: 1,
+              }}
+            >
+              {fmtUSD(total)}
+            </span>
+          </div>
+
+          {cotacaoUSD > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end", flexShrink: 0 }}>
+              <span className="campo-titulo" style={{ fontSize: 12, letterSpacing: "0.05em" }}>Cotação USD</span>
+              <span style={{ fontSize: 16, fontWeight: 500, color: "var(--color-value)" }}>
+                {fmtBRL(cotacaoUSD)}
+              </span>
+            </div>
+          )}
+        </div>
+      </SubCard>
+
+      <div className="grid3">
+        <SubCard><AnimatedValue titulo="Stocks"   rawValue={stocks}   formatter={fmtUSD} /></SubCard>
+        <SubCard><AnimatedValue titulo="Reits"    rawValue={reits}    formatter={fmtUSD} /></SubCard>
+        <SubCard><AnimatedValue titulo="Ações"    rawValue={acoes}    formatter={fmtUSD} /></SubCard>
+        <SubCard><AnimatedValue titulo="Fiis"     rawValue={fiis}     formatter={fmtUSD} /></SubCard>
+        <SubCard><AnimatedValue titulo="Bitcoins" rawValue={bitcoins} formatter={fmtUSD} /></SubCard>
+        <SubCard><AnimatedValue titulo="Reserva"  rawValue={reserva}  formatter={fmtUSD} /></SubCard>
       </div>
     </Card>
   );
@@ -1943,6 +2005,7 @@ export default function App() {
         <BotaoTopoFlutuante scrolled={scrolled} onTop={scrollToTop} />
         <main className="main">
           <div id="sec-patrimonio"><CardPatrimonio totais={totais} proventos={proventos} /></div>
+          <div id="sec-patrimonio-dolar"><CardPatrimonioDolar totais={totais} reservas={reservas} ativos={ativos} /></div>
           <div id="sec-evolucao"><CardEvolucao evolucao={evolucao} /></div>
           <div id="sec-reserva"><CardReserva reservas={reservas} alocacao={alocacao} /></div>
           <div id="sec-alocacao"><CardAlocacao alocacao={alocacao} /></div>
