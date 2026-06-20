@@ -280,7 +280,7 @@ function Loading() {
     <div className="loading-page">
       <div className="loading-box">
         {logoErr ? (
-          <div className="loading-logo">L</div>
+          <div className="loading-logo loading-logo-breathe">L</div>
         ) : (
           <img
             src="/assets/logo.png"
@@ -288,12 +288,12 @@ function Loading() {
             width={80}
             height={80}
             onError={() => setLogoErr(true)}
+            className="loading-logo-breathe"
             style={{ borderRadius: 20, objectFit: "contain" }}
           />
         )}
-        <h1 className="loading-titulo">Urano</h1>
         <Spinner />
-        <p className="loading-texto">Carregando Dados</p>
+        <p className="loading-texto">Carregando Dados...</p>
       </div>
     </div>
   );
@@ -326,21 +326,8 @@ function LogoAtivo({ ticker, size = 72 }) {
   );
 }
 
-// ── Âncoras de navegação ──────────────────────────────────────────────────────
-const ANCORAS = [
-  { id: "sec-patrimonio", label: "Patrimônio" },
-  { id: "sec-patrimonio-dolar", label: "Patrimônio USD" },
-  { id: "sec-evolucao",   label: "Evolução"   },
-  { id: "sec-alocacao",   label: "Alocação"   },
-  { id: "sec-aporte",     label: "Aporte"     },
-  { id: "sec-proventos",  label: "Proventos"  },
-  { id: "sec-heatmap",    label: "Heatmap"    },
-  ...CLASSES_ATIVOS.map(c => ({ id: `sec-${c.sufixo}`, label: c.titulo })),
-];
-
 function Navbar({ scrolled, ativos, scrollRef, onSelectTicker }) {
   const [logoErr, setLogoErr]       = useState(false);
-  const [menuOpen, setMenuOpen]     = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery]           = useState("");
   const [isMobile, setIsMobile]     = useState(() => typeof window !== "undefined" && window.innerWidth < 1024);
@@ -353,32 +340,23 @@ function Navbar({ scrolled, ativos, scrollRef, onSelectTicker }) {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Fecha menu/busca ao clicar fora
+  // Fecha busca ao clicar fora
   useEffect(() => {
-    if (!menuOpen && !searchOpen) return;
+    if (!searchOpen) return;
     const handler = (e) => {
       if (!e.target.closest(".navbar") && !e.target.closest(".navbar-search-results")) {
-        setMenuOpen(false);
         setSearchOpen(false);
         setQuery("");
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [menuOpen, searchOpen]);
+  }, [searchOpen]);
 
   // Foca input ao abrir busca
   useEffect(() => {
     if (searchOpen) setTimeout(() => inputRef.current?.focus(), 50);
   }, [searchOpen]);
-
-  const scrollTo = (id) => {
-    const el = document.getElementById(id);
-    if (!el || !scrollRef?.current) return;
-    const offset = el.offsetTop - 90;
-    scrollRef.current.scrollTo({ top: offset, behavior: "smooth" });
-    setMenuOpen(false);
-  };
 
   // Resultados de busca
   const resultados = query.trim().length >= 1
@@ -403,17 +381,6 @@ function Navbar({ scrolled, ativos, scrollRef, onSelectTicker }) {
         <span className="navbar-titulo">Urano</span>
 
         <div className="navbar-spacer" />
-
-        {/* Âncoras — desktop */}
-        {!isMobile && (
-          <div className="navbar-ancoras">
-            {ANCORAS.map(a => (
-              <button key={a.id} className="navbar-ancora" onClick={() => scrollTo(a.id)}>
-                {a.label}
-              </button>
-            ))}
-          </div>
-        )}
 
         {/* Busca — inline no desktop, botão no mobile */}
         <div style={{ position: "relative" }} ref={searchRef}>
@@ -546,32 +513,8 @@ function Navbar({ scrolled, ativos, scrollRef, onSelectTicker }) {
 
           </div>
 
-        {/* Hamburguer — mobile */}
-        {isMobile && (
-          <button
-            className={`btn-tema btn-hamburger ${menuOpen ? "btn-hamburger-open" : ""}`}
-            onClick={() => setMenuOpen(o => !o)}
-            aria-label="Menu"
-          >
-            <span /><span /><span />
-          </button>
-        )}
       </div>
 
-      {/* Menu mobile dropdown */}
-      {isMobile && menuOpen && (
-        <div className="navbar-menu-mobile">
-          {ANCORAS.map(a => (
-            <button
-              key={a.id}
-              className="navbar-menu-item"
-              onClick={() => scrollTo(a.id)}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      )}
     </nav>
   );
 }
@@ -1986,7 +1929,7 @@ export default function App() {
     <>
       <Style />
       <div className="loading-page">
-        <div className="loading-box">
+        <div className="loading-box card">
           <div style={{ color: COR_BAIXA, fontSize: 18, textAlign: "center" }}>
             Erro ao Carregar Dados:<br /><small>{erro}</small>
           </div>
@@ -2142,32 +2085,6 @@ function Style() {
       }
       .btn-tema:active { }
 
-      /* ── Âncoras desktop ── */
-      .navbar-ancoras {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        flex-wrap: nowrap;
-        overflow: hidden;
-      }
-      .navbar-ancora {
-        background: var(--bg3);
-        border: 1px solid transparent;
-        color: var(--color-label);
-        font-size: 13px;
-        font-weight: 500;
-        padding: 6px 12px;
-        border-radius: 10px;
-        cursor: pointer;
-        white-space: nowrap;
-        transition: background 0.15s, color 0.15s;
-        font-family: inherit;
-      }
-      .navbar-ancora:hover {
-        background: var(--bg4);
-        color: var(--color-value);
-      }
-
       /* ── Busca inline desktop ── */
       .navbar-search-inline {
         width: 240px;
@@ -2179,7 +2096,7 @@ function Style() {
         background: var(--bg4);
         border: 1px solid var(--border2);
         border-radius: 10px;
-        padding: 6px 12px;
+        padding: 10px 12px;
         transition: border-color 0.15s, box-shadow 0.15s;
       }
       .navbar-search-inline:focus-within {
@@ -2269,50 +2186,6 @@ function Style() {
         color: #ffffff;
       }
 
-      /* ── Hamburguer ── */
-      .btn-hamburger {
-        flex-direction: column !important;
-        gap: 5px !important;
-        padding: 0 !important;
-      }
-      .btn-hamburger span {
-        display: block;
-        width: 18px;
-        height: 2px;
-        background: var(--color-value);
-        border-radius: 2px;
-        transform-origin: center;
-      }
-      .btn-hamburger-open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-      .btn-hamburger-open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
-      .btn-hamburger-open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-
-      /* ── Menu mobile dropdown ── */
-      .navbar-menu-mobile {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        padding: 8px 0 4px;
-        border-top: 1px solid var(--border2);
-        margin-top: 10px;
-      }
-      .navbar-menu-item {
-        background: transparent;
-        border: none;
-        color: var(--color-value);
-        font-size: 14px;
-        font-weight: 500;
-        padding: 11px 14px;
-        border-radius: 10px;
-        cursor: pointer;
-        text-align: left;
-        transition: background 0.15s, color 0.15s;
-        font-family: inherit;
-      }
-      .navbar-menu-item:hover {
-        background: var(--bg4);
-        color: var(--accent-p);
-      }
       .navbar-logo {
         width: 36px; height: 36px;
         background: var(--accent);
@@ -2717,8 +2590,14 @@ function Style() {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 20px;
+        gap: 36px;
         width: 300px;
+      }
+      .loading-box.card {
+        background: var(--bg2);
+        border: 1px solid var(--border2);
+        border-radius: 24px;
+        padding: 32px;
       }
       .loading-logo {
         width: 72px; height: 72px;
@@ -2726,6 +2605,13 @@ function Style() {
         border-radius: 20px;
         display: flex; align-items: center; justify-content: center;
         font-size: 38px; font-weight: 900; color: var(--color-title);
+      }
+      .loading-logo-breathe {
+        animation: logoBreathe 2.6s ease-in-out infinite;
+      }
+      @keyframes logoBreathe {
+        0%, 100% { transform: scale(1);    filter: brightness(1)    drop-shadow(0 0 0px rgba(10,85,80,0)); }
+        50%      { transform: scale(1.07); filter: brightness(1.08) drop-shadow(0 0 16px rgba(10,85,80,0.5)); }
       }
       .loading-titulo { font-size: 30px; font-weight: 700; color: var(--color-title); }
       .loading-texto { font-size: 16px; color: var(--color-subtitle); }
