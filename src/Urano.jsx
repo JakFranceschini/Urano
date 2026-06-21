@@ -595,7 +595,7 @@ function CardPatrimonio({ totais, proventos }) {
             <div style={{
               position: "absolute", right: 0, top: 0, height: "100%",
               width: `${pctAportado}%`,
-              background: "rgba(255, 255, 255, 0.15)",
+              background: "rgba(255, 255, 255, 0.05)",
               borderRadius: "0 99px 99px 0",
               transition: "width 1.1s cubic-bezier(0.4,0,0.2,1)",
             }} />
@@ -806,7 +806,7 @@ function CardReserva({ reservas, alocacao }) {
             </span>
           </div>
 
-          <div style={{ position: "relative", height: 14, background: "rgba(255,255,255,0.06)", borderRadius: 8, overflow: "hidden" }}>
+          <div style={{ position: "relative", height: 14, background: "rgba(255,255,255,0.05)", borderRadius: 8, overflow: "hidden" }}>
             <div style={{
               height: "100%",
               width: `${progresso * 100}%`,
@@ -935,7 +935,7 @@ function BarraAlocacao({ dados, onHoverItem, hoveredIdx }) {
               {/* Mini linha atual vs ideal */}
               {d.ideal > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ height: 3, background: "var(--border2)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 2, overflow: "hidden" }}>
                     <div style={{
                       height: "100%",
                       width: `${Math.min(d.pct / d.ideal, 1) * 100}%`,
@@ -1185,7 +1185,7 @@ function CardAporte({ ativos, alocacao }) {
                 <div style={{
                   position: "absolute", right: 0, top: 0, height: "100%",
                   width: `${pctFalta}%`,
-                  background: "rgba(255,255,255,0.10)",
+                  background: "rgba(255, 255, 255, 0.05)",
                   borderRadius: "0 99px 99px 0",
                   transition: "width 1.1s cubic-bezier(0.4,0,0.2,1)",
                 }} />
@@ -1274,7 +1274,7 @@ function CardAporte({ ativos, alocacao }) {
                   </div>
                 )}
 
-                <div style={{ position: "relative", height: 20, borderRadius: 8, background: "rgba(255,255,255,0.06)" }}>
+                <div style={{ position: "relative", height: 20, borderRadius: 8, background: "rgba(255, 255, 255, 0.05)" }}>
                   <div style={{
                     position: "absolute", top: 0, left: 0, bottom: 0,
                     width: `${progIdeal * 100}%`,
@@ -1727,7 +1727,7 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
                 <div style={{
                   position: "absolute", right: 0, top: 0, height: "100%",
                   width: `${pctAportado}%`,
-                  background: "rgba(255,255,255,0.12)",
+                  background: "rgba(255,255,255,0.05)",
                   borderRadius: "0 99px 99px 0",
                   transition: "width 1.1s cubic-bezier(0.4,0,0.2,1)",
                 }} />
