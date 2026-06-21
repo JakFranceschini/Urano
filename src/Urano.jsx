@@ -44,6 +44,9 @@ const COR_ALTA        = "#0a5550"; // Verde escuro — lucro
 const COR_BAIXA       = "#8a3535"; // Vermelho — prejuízo
 const PALETA_ALOCACAO = ["#0a5550","#0c6560","#0e7971","#10908a","#13a097","#16b8ae"];
 
+// Espessura/altura padrão de TODAS as barras de progresso/composição do app
+const BARRA_ALTURA = 10;
+
 // ── Hook: contagem animada ────────────────────────────────────────────────────
 
 function AnimatedValue({ rawValue, formatter, cor, titulo }) {
@@ -539,7 +542,8 @@ function BotaoTopoFlutuante({ scrolled, onTop }) {
 
 // ── Card Patrimônio ───────────────────────────────────────────────────────────
 
-function CardPatrimonio({ totais, proventos }) {
+function CardPatrimonio({ totais, proventos, reservas, ativos }) {
+  const [open, setOpen] = useState(false);
   if (!totais?.length || !proventos?.length) return null;
   const t = totais[0], p = proventos[0];
   const total    = toFloat(t.total_patrimonio);
@@ -555,9 +559,30 @@ function CardPatrimonio({ totais, proventos }) {
   const pctVariacao  = aportado > 0 ? Math.abs(diff) / aportado * 100 : 0;
   const pctAportado  = Math.max(100 - pctVariacao, 0);
 
+  // ── Patrimônio em Dólar (segunda linha da aba totais) ──
+  const temDolar  = totais.length > 1;
+  const td        = temDolar ? totais[1] : null;
+  const totalUSD    = temDolar ? toFloat(td.total_patrimonio) : 0;
+  const stocksUSD    = temDolar ? toFloat(td.total_stocks)   : 0;
+  const reitsUSD     = temDolar ? toFloat(td.total_reits)    : 0;
+  const acoesUSD     = temDolar ? toFloat(td.total_acoes)    : 0;
+  const fiisUSD      = temDolar ? toFloat(td.total_fiis)     : 0;
+  const bitcoinsUSD  = temDolar ? toFloat(td.total_bitcoins) : 0;
+  const reservaUSD   = reservas?.length > 1 ? toFloat(reservas[1].reserva_atual) : 0;
+
+  const moeda      = (ativos ?? []).find(a => String(a.classe).toLowerCase().trim() === "moeda");
+  const cotacaoUSD = moeda ? toFloat(moeda.cotacao) : 0;
+
   return (
     <Card>
-      <h2 className="card-titulo">Patrimônio</h2>
+      <div className="card-header">
+        <h2 className="card-titulo">Patrimônio</h2>
+        {temDolar && (
+          <BotaoVer onClick={() => setOpen(o => !o)} altText="Ver Mais">
+            {open ? "Ocultar" : "Ver Mais"}
+          </BotaoVer>
+        )}
+      </div>
 
       <SubCard className="subcard-hero">
         {/* Topo: valor principal à esq, variação à dir — sem bloco/box */}
@@ -583,7 +608,7 @@ function CardPatrimonio({ totais, proventos }) {
         {/* Barra de composição */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
           {/* Barra: variação à esq → aportado à dir */}
-          <div style={{ position: "relative", height: 8, borderRadius: 99, overflow: "hidden", background: "rgba(255, 255, 255, 0.05)" }}>
+          <div style={{ position: "relative", height: BARRA_ALTURA, borderRadius: 99, overflow: "hidden", background: "rgba(255, 255, 255, 0.05)" }}>
             <div style={{
               position: "absolute", left: 0, top: 0, height: "100%",
               width: `${pctVariacao}%`,
@@ -622,67 +647,60 @@ function CardPatrimonio({ totais, proventos }) {
         <SubCard><AnimatedValue titulo="Variação Com Dividendos"   rawValue={diffDiv}  formatter={v => `${sinal(v)}${fmtBRL(v)}`}    cor={corVar(diffDiv)} /></SubCard>
         <SubCard><AnimatedValue titulo="Variação % Com Dividendos" rawValue={percDiv}  formatter={v => `${sinal(v)}${v.toFixed(2)}%`} cor={corVar(percDiv)} /></SubCard>
       </div>
-    </Card>
-  );
-}
 
-// ── Card Patrimônio em Dólar ──────────────────────────────────────────────────
-
-function CardPatrimonioDolar({ totais, reservas, ativos }) {
-  if (!totais?.length || totais.length < 2) return null;
-  const t = totais[1]; // segunda linha da aba totais (valores em dólar)
-
-  const total    = toFloat(t.total_patrimonio);
-  const stocks   = toFloat(t.total_stocks);
-  const reits    = toFloat(t.total_reits);
-  const acoes    = toFloat(t.total_acoes);
-  const fiis     = toFloat(t.total_fiis);
-  const bitcoins = toFloat(t.total_bitcoins);
-  const reserva  = reservas?.length > 1 ? toFloat(reservas[1].reserva_atual) : 0;
-
-  const moeda    = (ativos ?? []).find(a => String(a.classe).toLowerCase().trim() === "moeda");
-  const cotacaoUSD = moeda ? toFloat(moeda.cotacao) : 0;
-
-  return (
-    <Card>
-      <h2 className="card-titulo">Patrimônio em Dólar</h2>
-
-      <SubCard className="subcard-hero">
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-            <span className="campo-titulo" style={{ fontSize: 14, letterSpacing: "0.05em" }}>Patrimônio Atual (USD)</span>
-            <span
-              className="campo-valor animated-value"
-              style={{
-                opacity: total ? 1 : 0,
-                transform: total ? "translateY(0)" : "translateY(10px)",
-                transition: "opacity 0.55s cubic-bezier(0.22,1,0.36,1), transform 0.55s cubic-bezier(0.22,1,0.36,1)",
-                lineHeight: 1,
-              }}
-            >
-              {fmtUSD(total)}
-            </span>
-          </div>
-
-          {cotacaoUSD > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end", flexShrink: 0 }}>
-              <span className="campo-titulo" style={{ fontSize: 12, letterSpacing: "0.05em" }}>Cotação USD</span>
-              <span style={{ fontSize: 16, fontWeight: 500, color: "var(--color-value)" }}>
-                {fmtBRL(cotacaoUSD)}
+      {temDolar && (
+        <Expandable open={open}>
+          <SubCard className="subcard-hero">
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+              <span className="campo-titulo" style={{ fontSize: 14, letterSpacing: "0.05em" }}>Patrimônio Atual (USD)</span>
+              <span
+                className="campo-valor animated-value"
+                style={{
+                  opacity: totalUSD ? 1 : 0,
+                  transform: totalUSD ? "translateY(0)" : "translateY(10px)",
+                  transition: "opacity 0.55s cubic-bezier(0.22,1,0.36,1), transform 0.55s cubic-bezier(0.22,1,0.36,1)",
+                  lineHeight: 1,
+                }}
+              >
+                {fmtUSD(totalUSD)}
               </span>
-            </div>
-          )}
-        </div>
-      </SubCard>
 
-      <div className="grid3">
-        <SubCard><AnimatedValue titulo="Stocks"   rawValue={stocks}   formatter={fmtUSD} /></SubCard>
-        <SubCard><AnimatedValue titulo="Reits"    rawValue={reits}    formatter={fmtUSD} /></SubCard>
-        <SubCard><AnimatedValue titulo="Ações"    rawValue={acoes}    formatter={fmtUSD} /></SubCard>
-        <SubCard><AnimatedValue titulo="Fiis"     rawValue={fiis}     formatter={fmtUSD} /></SubCard>
-        <SubCard><AnimatedValue titulo="Bitcoins" rawValue={bitcoins} formatter={fmtUSD} /></SubCard>
-        <SubCard><AnimatedValue titulo="Reserva"  rawValue={reserva}  formatter={fmtUSD} /></SubCard>
-      </div>
+              {cotacaoUSD > 0 && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                  <span className="campo-titulo" style={{ fontSize: 12, letterSpacing: "0.05em" }}>Cotação USD</span>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-value)" }}>
+                    {fmtBRL(cotacaoUSD)}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="usd-grid" style={{ marginTop: 16 }}>
+              {[
+                { titulo: "Stocks",   valor: stocksUSD },
+                { titulo: "Reits",    valor: reitsUSD },
+                { titulo: "Ações",    valor: acoesUSD },
+                { titulo: "Fiis",     valor: fiisUSD },
+                { titulo: "Bitcoins", valor: bitcoinsUSD },
+                { titulo: "Reserva",  valor: reservaUSD },
+              ]
+                .sort((a, b) => b.valor - a.valor)
+                .map((item) => {
+                  const pct = totalUSD > 0 ? (item.valor / totalUSD * 100) : 0;
+                  return (
+                    <div key={item.titulo} className="usd-item">
+                      <div className="usd-item-top">
+                        <span className="usd-item-titulo">{item.titulo}</span>
+                        <span className="usd-item-pct">{pct.toFixed(1)}%</span>
+                      </div>
+                      <span className="usd-item-valor">{fmtUSD(item.valor)}</span>
+                    </div>
+                  );
+                })}
+            </div>
+          </SubCard>
+        </Expandable>
+      )}
     </Card>
   );
 }
@@ -775,7 +793,8 @@ function CardEvolucao({ evolucao }) {
 
 // ── Card Reserva ──────────────────────────────────────────────────────────────
 
-function CardReserva({ reservas, alocacao }) {
+function CardReserva({ reservas, alocacao, totais }) {
+  const [open, setOpen] = useState(false);
   if (!reservas?.length || !alocacao?.length) return null;
   const r = reservas[0], a = alocacao[0];
   const aktual   = toFloat(r.reserva_atual);
@@ -788,44 +807,67 @@ function CardReserva({ reservas, alocacao }) {
   const progresso = pctIdeal > 0 ? Math.min(pctAtual / pctIdeal, 1) : 0;
   const corBarra  = progresso >= 1 ? COR_ALTA : progresso >= 0.75 ? COR_BAIXA : "#8a3535";
 
+  const totalPatrimonio = toFloat(totais?.[0]?.total_patrimonio);
+  const valorIdeal       = totalPatrimonio * pctIdeal / 100;
+  const valorFaltando    = Math.max(valorIdeal - aktual, 0);
+
   return (
     <Card>
-      <h2 className="card-titulo">Reserva de Emergência</h2>
+      <div className="card-header">
+        <h2 className="card-titulo">Reserva de Emergência</h2>
+        <BotaoVer onClick={() => setOpen(o => !o)} altText="Ver Mais">
+          {open ? "Ocultar" : "Ver Mais"}
+        </BotaoVer>
+      </div>
       <div className="grid3">
-        <SubCard><AnimatedValue titulo="Reserva Atual"                   rawValue={aktual}   formatter={fmtBRL} /></SubCard>
-        <SubCard><AnimatedValue titulo="Porcentagem Atual no Patrimônio" rawValue={pctAtual} formatter={v => `${v.toFixed(2)}%`} /></SubCard>
-        <SubCard><AnimatedValue titulo={tituloD} rawValue={Math.abs(diff)} formatter={v => `${s}${v.toFixed(2)}%`} cor={corVar(diff)} /></SubCard>
+        <SubCard><AnimatedValue titulo="Reserva Atual"   rawValue={aktual}     formatter={fmtBRL} /></SubCard>
+        {valorIdeal > 0 && (
+          <>
+            <SubCard><AnimatedValue titulo="Reserva Ideal"    rawValue={valorIdeal}    formatter={fmtBRL} /></SubCard>
+            <SubCard><AnimatedValue titulo="Reserva Faltando" rawValue={valorFaltando} formatter={fmtBRL} cor={valorFaltando > 0 ? COR_BAIXA : COR_ALTA} /></SubCard>
+          </>
+        )}
       </div>
 
-      {pctIdeal > 0 && (
-        <SubCard style={{ gap: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-label)" }}>Progresso em Relação à Meta</span>
-            <span style={{ fontSize: 14, fontWeight: 500, color: corBarra }}>
-              {Math.round(progresso * 100)}%
-            </span>
+      <Expandable open={open}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div className="grid3">
+            <SubCard><AnimatedValue titulo="Porcentagem Atual no Patrimônio" rawValue={pctAtual} formatter={v => `${v.toFixed(2)}%`} /></SubCard>
+            <SubCard><AnimatedValue titulo="Porcentagem Ideal no Patrimônio" rawValue={pctIdeal} formatter={v => `${v.toFixed(2)}%`} /></SubCard>
+            <SubCard><AnimatedValue titulo={tituloD} rawValue={Math.abs(diff)} formatter={v => `${s}${v.toFixed(2)}%`} cor={corVar(diff)} /></SubCard>
           </div>
 
-          <div style={{ position: "relative", height: 14, background: "rgba(255,255,255,0.05)", borderRadius: 8, overflow: "hidden" }}>
-            <div style={{
-              height: "100%",
-              width: `${progresso * 100}%`,
-              background: corBarra,
-              borderRadius: 8,
-              transition: "width 1s cubic-bezier(0.4,0,0.2,1)",
-            }} />
-          </div>
+          {pctIdeal > 0 && (
+            <SubCard style={{ gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-label)" }}>Progresso em Relação à Meta</span>
+                <span style={{ fontSize: 14, fontWeight: 500, color: corBarra }}>
+                  {Math.round(progresso * 100)}%
+                </span>
+              </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
-            <span style={{ fontSize: 12, color: "var(--color-label)" }}>
-              Atual <span style={{ color: "var(--color-label)", fontWeight: 500 }}>{pctAtual.toFixed(1)}%</span>
-            </span>
-            <span style={{ fontSize: 12, color: "var(--color-label)" }}>
-              Meta <span style={{ color: "var(--color-label)", fontWeight: 500 }}>{pctIdeal.toFixed(1)}%</span>
-            </span>
-          </div>
-        </SubCard>
-      )}
+              <div style={{ position: "relative", height: BARRA_ALTURA, background: "rgba(255,255,255,0.05)", borderRadius: 99, overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: `${progresso * 100}%`,
+                  background: corBarra,
+                  borderRadius: 99,
+                  transition: "width 1s cubic-bezier(0.4,0,0.2,1)",
+                }} />
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, color: "var(--color-label)" }}>
+                  Atual <span style={{ color: "var(--color-label)", fontWeight: 500 }}>{pctAtual.toFixed(1)}%</span>
+                </span>
+                <span style={{ fontSize: 12, color: "var(--color-label)" }}>
+                  Meta <span style={{ color: "var(--color-label)", fontWeight: 500 }}>{pctIdeal.toFixed(1)}%</span>
+                </span>
+              </div>
+            </SubCard>
+          )}
+        </div>
+      </Expandable>
     </Card>
   );
 }
@@ -935,12 +977,12 @@ function BarraAlocacao({ dados, onHoverItem, hoveredIdx }) {
               {/* Mini linha atual vs ideal */}
               {d.ideal > 0 && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <div style={{ height: 3, background: "rgba(255,255,255,0.05)", borderRadius: 2, overflow: "hidden" }}>
+                  <div style={{ height: BARRA_ALTURA, background: "rgba(255,255,255,0.05)", borderRadius: 99, overflow: "hidden" }}>
                     <div style={{
                       height: "100%",
                       width: `${Math.min(d.pct / d.ideal, 1) * 100}%`,
                       background: cor,
-                      borderRadius: 2,
+                      borderRadius: 99,
                       opacity: 0.7,
                       transition: "width 0.8s ease",
                     }} />
@@ -1173,7 +1215,7 @@ function CardAporte({ ativos, alocacao }) {
 
             {/* Barra estilo Patrimônio: atual (roxo) + faltando (cinza) */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
-              <div style={{ position: "relative", height: 8, borderRadius: 99, overflow: "hidden", background: "rgba(255,255,255,0.05)" }}>
+              <div style={{ position: "relative", height: BARRA_ALTURA, borderRadius: 99, overflow: "hidden", background: "rgba(255,255,255,0.05)" }}>
                 <div style={{
                   position: "absolute", left: 0, top: 0, height: "100%",
                   width: `${pctAtual}%`,
@@ -1274,18 +1316,18 @@ function CardAporte({ ativos, alocacao }) {
                   </div>
                 )}
 
-                <div style={{ position: "relative", height: 20, borderRadius: 8, background: "rgba(255, 255, 255, 0.05)" }}>
+                <div style={{ position: "relative", height: BARRA_ALTURA, borderRadius: 99, background: "rgba(255, 255, 255, 0.05)" }}>
                   <div style={{
                     position: "absolute", top: 0, left: 0, bottom: 0,
                     width: `${progIdeal * 100}%`,
                     background: `${corBarra}22`,
-                    borderRadius: 8,
+                    borderRadius: 99,
                   }} />
                   <div style={{
                     position: "absolute", top: 0, left: 0, bottom: 0,
                     width: `${progAtual * 100}%`,
                     background: corBarra,
-                    borderRadius: 8,
+                    borderRadius: 99,
                     transition: "width 0.75s cubic-bezier(0.4,0,0.2,1)",
                     display: "flex", alignItems: "center", justifyContent: "flex-end",
                     overflow: "hidden",
@@ -1501,18 +1543,30 @@ function HeatmapCell({ ativo }) {
 // ── Card Heatmap ──────────────────────────────────────────────────────────────
 
 function CardHeatmap({ ativos }) {
+  const [open, setOpen] = useState(false);
   if (!ativos?.length) return null;
 
   const df = ativos
     .filter(a => toFloat(a.total_atual) > 0)
     .sort((a, b) => toFloat(b.variacao_percentual) - toFloat(a.variacao_percentual));
 
+  const LIMITE = 12;
+  const visiveis = open ? df : df.slice(0, LIMITE);
+  const temMais  = df.length > LIMITE;
+
   return (
     <Card>
-      <h2 className="card-titulo">Mapa de Ativos</h2>
+      <div className="card-header">
+        <h2 className="card-titulo">Mapa de Ativos</h2>
+        {temMais && (
+          <BotaoVer onClick={() => setOpen(o => !o)} altText="Ver Mais">
+            {open ? "Ocultar" : "Ver Mais"}
+          </BotaoVer>
+        )}
+      </div>
       <SubCard>
         <div className="heatmap-grid">
-          {df.map((at, i) => <HeatmapCell key={i} ativo={at} />)}
+          {visiveis.map((at, i) => <HeatmapCell key={i} ativo={at} />)}
         </div>
       </SubCard>
     </Card>
@@ -1715,7 +1769,7 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
 
         {/* Barra + legenda simples */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 14 }}>
-              <div style={{ position: "relative", height: 6, borderRadius: 99, overflow: "hidden", background: "rgba(255,255,255,0.05)" }}>
+              <div style={{ position: "relative", height: BARRA_ALTURA, borderRadius: 99, overflow: "hidden", background: "rgba(255,255,255,0.05)" }}>
                 <div style={{
                   position: "absolute", left: 0, top: 0, height: "100%",
                   width: `${pctVariacao}%`,
@@ -1947,10 +2001,9 @@ export default function App() {
         <Navbar scrolled={scrolled} ativos={ativos} scrollRef={scrollRef} onSelectTicker={(ticker) => setSearchCmd({ ticker, v: Date.now() })} />
         <BotaoTopoFlutuante scrolled={scrolled} onTop={scrollToTop} />
         <main className="main">
-          <div id="sec-patrimonio"><CardPatrimonio totais={totais} proventos={proventos} /></div>
-          <div id="sec-patrimonio-dolar"><CardPatrimonioDolar totais={totais} reservas={reservas} ativos={ativos} /></div>
+          <div id="sec-patrimonio"><CardPatrimonio totais={totais} proventos={proventos} reservas={reservas} ativos={ativos} /></div>
           <div id="sec-evolucao"><CardEvolucao evolucao={evolucao} /></div>
-          <div id="sec-reserva"><CardReserva reservas={reservas} alocacao={alocacao} /></div>
+          <div id="sec-reserva"><CardReserva reservas={reservas} alocacao={alocacao} totais={totais} /></div>
           <div id="sec-alocacao"><CardAlocacao alocacao={alocacao} /></div>
           <div id="sec-aporte"><CardAporte ativos={ativos} alocacao={alocacao} /></div>
           <div id="sec-proventos"><CardProventos proventos={proventos} /></div>
@@ -2533,6 +2586,33 @@ function Style() {
       @media (max-width: 1024px) { .ativo-grid { grid-template-columns: repeat(3, 1fr); } }
       @media (max-width: 640px)  { .ativo-grid { grid-template-columns: repeat(2, 1fr); gap: 10px 12px; } }
       @media (max-width: 340px)  { .ativo-grid { grid-template-columns: 1fr; } }
+
+      /* ── Grid compacta para detalhamento em dólar ── */
+      .usd-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .usd-item {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        transition: background 0.18s, border-color 0.18s;
+      }
+      .usd-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
+      .usd-item-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+      .usd-item-titulo { font-size: 12px; font-weight: 500; color: var(--color-label); letter-spacing: 0.02em; }
+      .usd-item-pct    { font-size: 11px; font-weight: 500; color: var(--color-label); opacity: 0.7; }
+      .usd-item-valor  { font-size: 18px; font-weight: 400; color: var(--color-value); letter-spacing: 0.02em; }
+      @media (max-width: 640px) {
+        .usd-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .usd-item { padding: 10px 12px; }
+        .usd-item-valor { font-size: 16px; }
+      }
 
       /* ── Heatmap ── */
       .heatmap-grid {
