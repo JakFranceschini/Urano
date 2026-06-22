@@ -666,7 +666,7 @@ function CardPatrimonio({ totais, proventos, reservas, ativos }) {
               </span>
 
               {cotacaoUSD > 0 && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 6 }}>
                   <span className="campo-titulo" style={{ fontSize: 12, letterSpacing: "0.05em" }}>Cotação USD</span>
                   <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-value)" }}>
                     {fmtBRL(cotacaoUSD)}
@@ -839,13 +839,6 @@ function CardReserva({ reservas, alocacao, totais }) {
 
           {pctIdeal > 0 && (
             <SubCard style={{ gap: 10 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: 14, fontWeight: 500, color: "var(--color-label)" }}>Progresso em Relação à Meta</span>
-                <span style={{ fontSize: 14, fontWeight: 500, color: corBarra }}>
-                  {Math.round(progresso * 100)}%
-                </span>
-              </div>
-
               <div style={{ position: "relative", height: BARRA_ALTURA, background: "rgba(255,255,255,0.05)", borderRadius: 99, overflow: "hidden" }}>
                 <div style={{
                   height: "100%",
@@ -862,6 +855,9 @@ function CardReserva({ reservas, alocacao, totais }) {
                 </span>
                 <span style={{ fontSize: 12, color: "var(--color-label)" }}>
                   Meta <span style={{ color: "var(--color-label)", fontWeight: 500 }}>{pctIdeal.toFixed(1)}%</span>
+                  {" "}<span style={{ color: COR_BAIXA, fontWeight: 500 }}>
+                    ({Math.max(pctIdeal - pctAtual, 0).toFixed(1)}% faltando)
+                  </span>
                 </span>
               </div>
             </SubCard>
@@ -1197,22 +1193,6 @@ function CardAporte({ ativos, alocacao }) {
               </span>
             </div>
 
-            {/* Métricas alinhadas à esquerda, sem separadores */}
-            <div style={{ display: "flex", gap: 28, marginTop: 10, flexWrap: "wrap" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <span className="campo-titulo">Atual</span>
-                <span style={{ fontSize: 18, fontWeight: 500, color: "var(--color-value)" }}>{classePrio.atual.toFixed(2)}%</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <span className="campo-titulo">Meta</span>
-                <span style={{ fontSize: 18, fontWeight: 500, color: "var(--color-value)" }}>{classePrio.ideal.toFixed(2)}%</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <span className="campo-titulo">Faltando</span>
-                <span style={{ fontSize: 18, fontWeight: 500, color: COR_BAIXA }}>+{classePrio.diff.toFixed(2)}%</span>
-              </div>
-            </div>
-
             {/* Barra estilo Patrimônio: atual (roxo) + faltando (cinza) */}
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
               <div style={{ position: "relative", height: BARRA_ALTURA, borderRadius: 99, overflow: "hidden", background: "rgba(255,255,255,0.05)" }}>
@@ -1233,16 +1213,17 @@ function CardAporte({ ativos, alocacao }) {
                 }} />
               </div>
 
-              {/* Legenda em duas colunas com label acima do valor */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ fontSize: 10, color: "var(--color-label)", fontWeight: 500 }}>Atual ({pctAtual.toFixed(1)}%)</span>
-                  <span style={{ fontSize: 12, color: COR_BAIXA, fontWeight: 500 }}>{classePrio.atual.toFixed(2)}%</span>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2, alignItems: "flex-end" }}>
-                  <span style={{ fontSize: 10, color: "var(--color-label)", fontWeight: 500 }}>Faltando ({pctFalta.toFixed(1)}%)</span>
-                  <span style={{ fontSize: 12, color: "var(--color-label)", fontWeight: 500 }}>+{classePrio.diff.toFixed(2)}%</span>
-                </div>
+              {/* Legenda em linha única, igual ao card Reserva de Emergência */}
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 12, color: "var(--color-label)" }}>
+                  Atual <span style={{ color: "var(--color-label)", fontWeight: 500 }}>{classePrio.atual.toFixed(1)}%</span>
+                </span>
+                <span style={{ fontSize: 12, color: "var(--color-label)" }}>
+                  Meta <span style={{ color: "var(--color-label)", fontWeight: 500 }}>{classePrio.ideal.toFixed(1)}%</span>
+                  {" "}<span style={{ color: COR_BAIXA, fontWeight: 500 }}>
+                    ({classePrio.diff.toFixed(1)}% faltando)
+                  </span>
+                </span>
               </div>
             </div>
           </SubCard>
@@ -2103,7 +2084,7 @@ function Style() {
         z-index: 100;
         width: calc(100% - 80px);
         box-sizing: border-box;
-        border-radius: 20px;
+        border-radius: 26px;
         padding: 20px 24px;
         display: flex;
         flex-direction: column;
