@@ -809,12 +809,14 @@ function CardReserva({ reservas, alocacao, totais }) {
 
   const totalPatrimonio = toFloat(totais?.[0]?.total_patrimonio);
   const valorIdeal       = totalPatrimonio * pctIdeal / 100;
-  const valorFaltando    = Math.max(valorIdeal - aktual, 0);
+  const valorDiferenca   = aktual - valorIdeal;
+  const tituloValorD     = valorDiferenca > 0 ? "Reserva Sobrando" : valorDiferenca < 0 ? "Reserva Faltando" : "Reserva Equilibrada";
+  const valorD           = Math.abs(valorDiferenca);
 
   return (
     <Card>
       <div className="card-header">
-        <h2 className="card-titulo">Reserva de Emergência</h2>
+        <h2 className="card-titulo">Reserva</h2>
         <BotaoVer onClick={() => setOpen(o => !o)} altText="Ver Mais">
           {open ? "Ocultar" : "Ver Mais"}
         </BotaoVer>
@@ -824,13 +826,13 @@ function CardReserva({ reservas, alocacao, totais }) {
         {valorIdeal > 0 && (
           <>
             <SubCard><AnimatedValue titulo="Reserva Ideal"    rawValue={valorIdeal}    formatter={fmtBRL} /></SubCard>
-            <SubCard><AnimatedValue titulo="Reserva Faltando" rawValue={valorFaltando} formatter={fmtBRL} cor={valorFaltando > 0 ? COR_BAIXA : COR_ALTA} /></SubCard>
+            <SubCard><AnimatedValue titulo={tituloValorD} rawValue={valorD} formatter={fmtBRL} cor={valorDiferenca > 0 ? COR_ALTA : valorDiferenca < 0 ? COR_BAIXA : "var(--color-neutral)"} /></SubCard>
           </>
         )}
       </div>
 
       <Expandable open={open}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div className="grid3">
             <SubCard><AnimatedValue titulo="Porcentagem Atual no Patrimônio" rawValue={pctAtual} formatter={v => `${v.toFixed(2)}%`} /></SubCard>
             <SubCard><AnimatedValue titulo="Porcentagem Ideal no Patrimônio" rawValue={pctIdeal} formatter={v => `${v.toFixed(2)}%`} /></SubCard>
@@ -838,7 +840,7 @@ function CardReserva({ reservas, alocacao, totais }) {
           </div>
 
           {pctIdeal > 0 && (
-            <SubCard style={{ gap: 10 }}>
+            <SubCard>
               <div style={{ position: "relative", height: BARRA_ALTURA, background: "rgba(255,255,255,0.05)", borderRadius: 99, overflow: "hidden" }}>
                 <div style={{
                   height: "100%",
@@ -855,8 +857,8 @@ function CardReserva({ reservas, alocacao, totais }) {
                 </span>
                 <span style={{ fontSize: 12, color: "var(--color-label)" }}>
                   Meta <span style={{ color: "var(--color-label)", fontWeight: 500 }}>{pctIdeal.toFixed(1)}%</span>
-                  {" "}<span style={{ color: COR_BAIXA, fontWeight: 500 }}>
-                    ({Math.max(pctIdeal - pctAtual, 0).toFixed(1)}% faltando)
+                  {" "}<span style={{ color: corVar(diff), fontWeight: 500 }}>
+                    ({Math.abs(pctIdeal - pctAtual).toFixed(1)}% {pctAtual >= pctIdeal ? "sobrando" : "faltando"})
                   </span>
                 </span>
               </div>
