@@ -39,7 +39,7 @@ const PAGINAS = [
 
 const FILTROS = [
   { texto: "Nome",       key: "nome"                },
-  { texto: "Total Atual",key: "total_atual"         },
+  { texto: "Total atual",key: "total_atual"         },
   { texto: "Variação",   key: "variacao_total"      },
   { texto: "Variação %", key: "variacao_percentual" },
   { texto: "% Atual",    key: "porcentagem_atual"   },
@@ -69,6 +69,15 @@ function fmtUSD(v) {
 }
 
 function sinal(v) { return v > 0 ? "+" : ""; }
+
+// Converte um texto para sentence case: primeira letra maiúscula, restante minúsculo
+// (para uma única palavra, aplica a mesma regra: só a primeira letra em maiúscula).
+function sentenceCase(str) {
+  const s = String(str ?? "");
+  const idx = s.search(/\p{L}/u);
+  if (idx === -1) return s;
+  return s.slice(0, idx) + s.charAt(idx).toUpperCase() + s.slice(idx + 1).toLowerCase();
+}
 
 function corVar(v) {
   if (v > 0) return COR_ALTA;
@@ -296,7 +305,7 @@ function SubCard({ children, className = "", style = {}, id }) {
 }
 
 // HeroValor — bloco "título pequeno + valor grande em destaque" usado em todos
-// os cards com número principal (Patrimônio, Patrimônio USD, Classe Prioritária, etc.)
+// os cards com número principal (Patrimônio, Patrimônio USD, Classe prioritária, etc.)
 function HeroValor({ titulo, valor, cor, visible = true, className = "" }) {
   return (
     <div className={`hero-valor ${className}`}>
@@ -353,9 +362,15 @@ function Tile({ cor, titulo, valor, diff, metaPct, metaLabel, isHover, onHoverSt
   );
 }
 
-function ListRow({ label, tag, value, valueColor, sub, subColor, onClick, chevron = false, plain = false, highlight = false }) {
+function ListRow({ label, tag, value, valueColor, sub, subColor, onClick, onMouseEnter, onMouseLeave, chevron = false, plain = false, highlight = false, highlightColor }) {
   return (
-    <div className={`list-row${plain ? " list-row-plain" : ""}${onClick ? " list-row-clickable" : ""}${highlight ? " list-row-filtrado" : ""}`} onClick={onClick}>
+    <div
+      className={`list-row${plain ? " list-row-plain" : ""}${onClick ? " list-row-clickable" : ""}${highlight ? " list-row-filtrado" : ""}`}
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      style={highlight && highlightColor ? { "--hl-bg": `${highlightColor}22`, "--hl-border": `${highlightColor}80` } : undefined}
+    >
       <div className="list-row-left">
         <span className="list-row-label">{label}</span>
         {tag && <span className="list-row-tag">{tag}</span>}
@@ -375,7 +390,7 @@ function ListRow({ label, tag, value, valueColor, sub, subColor, onClick, chevro
   );
 }
 
-// criarBrilho — efeito de "brilho" ao clicar, usado nos botões de filtro e "Ver Mais"
+// criarBrilho — efeito de "brilho" ao clicar, usado nos botões de filtro e "Ver mais"
 function criarBrilho(e, btn) {
   if (!btn) return;
   btn.classList.remove("click-glow");
@@ -536,7 +551,7 @@ function Loading() {
         ) : (
           <img
             src="/assets/logo.png"
-            alt="Urano Logo"
+            alt="Urano logo"
             width={80}
             height={80}
             onError={() => setLogoErr(true)}
@@ -545,7 +560,7 @@ function Loading() {
           />
         )}
         <Spinner />
-        <p className="loading-texto">Carregando Dados...</p>
+        <p className="loading-texto">Carregando dados...</p>
       </div>
     </div>
   );
@@ -886,7 +901,7 @@ function BotaoTopoFlutuante({ scrolled, onTop }) {
       className={`btn-topo-flutuante ${scrolled ? "btn-topo-flutuante-visible" : ""}`}
       onClick={onTop}
       title="Voltar ao Topo"
-      aria-label="Voltar ao Topo"
+      aria-label="Voltar ao topo"
     >
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 19V5" />
@@ -1004,7 +1019,7 @@ function CardPatrimonio({ totais, proventos, evolucao }) {
       <SubCard>
         <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
           <div className="list-row-left">
-            <span className="list-row-label">Patrimônio Atual</span>
+            <span className="list-row-label">Atual</span>
           </div>
           <div className="list-row-right">
             <span className="list-row-value">{fmtBRL(total)}</span>
@@ -1031,7 +1046,7 @@ function CardPatrimonio({ totais, proventos, evolucao }) {
 
       {temEvolucao && (
         <SubCard style={{ overflow: "hidden" }}>
-          <HeroValor titulo="Patrimônio Atual" valor={fmtBRL(total)} visible={!!total} />
+          <HeroValor titulo="Patrimônio atual" valor={fmtBRL(total)} visible={!!total} />
           <div className="card-header" style={{ margin: "var(--space-2) 0" }}>
             <SeletorAno anos={anosNumEvolucao} anoInicio={anoInicioEvolucao} onChange={setAnoInicioEvolucao} />
           </div>
@@ -1173,7 +1188,7 @@ function CardResumoInvestimentos({ totais }) {
       <SubCard>
         <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
           <div className="list-row-left">
-            <span className="list-row-label">Total Atual</span>
+            <span className="list-row-label">Atual</span>
           </div>
           <div className="list-row-right">
             <span className="list-row-value">{fmtBRL(total)}</span>
@@ -1234,22 +1249,32 @@ function BarraAlocacao({ dados, onHoverItem, hoveredIdx }) {
         })}
       </div>
 
-      {/* Cards de legenda — grid único, responsividade tratada via CSS (.tiles-grid) */}
-      <div className="tiles-grid">
+      {/* Lista de classes — mesmo padrão de list-row usado no resto do app, com divisórias entre itens */}
+      <div style={{ marginTop: "var(--space-3)", marginBottom: "calc(var(--space-4) * -1)" }}>
         {dados.map((d, i) => {
           const cor = PALETA_ALOCACAO[i % PALETA_ALOCACAO.length];
           return (
-            <Tile
+            <ListRow
               key={d.titulo}
-              cor={cor}
-              titulo={d.titulo}
-              valor={`${d.pct.toFixed(1)}%`}
-              diff={d.diff}
-              metaPct={d.ideal > 0 ? Math.min(d.pct / d.ideal, 1) * 100 : null}
-              metaLabel={`Meta ${d.ideal.toFixed(1)}%`}
-              isHover={hoveredIdx === i}
-              onHoverStart={() => onHoverItem(i)}
-              onHoverEnd={() => onHoverItem(null)}
+              onMouseEnter={() => onHoverItem(i)}
+              onMouseLeave={() => onHoverItem(null)}
+              label={
+                <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: cor, flexShrink: 0 }} />
+                    {d.titulo}
+                  </span>
+                  {d.ideal > 0 && (
+                    <span className="list-row-tag">Meta {d.ideal.toFixed(1)}%</span>
+                  )}
+                </span>
+              }
+              value={`${d.pct.toFixed(1)}%`}
+              sub={d.diff != null ? `${sinal(d.diff)}${d.diff.toFixed(2)}%` : undefined}
+              subColor={corVar(d.diff)}
+              plain
+              highlight={hoveredIdx === i}
+              highlightColor={cor}
             />
           );
         })}
@@ -1342,7 +1367,7 @@ function CardAporte({ ativos, alocacao }) {
           <SubCard>
             <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
               <div className="list-row-left">
-                <span className="list-row-label">Classe Prioritária</span>
+                <span className="list-row-label">Classe prioritária</span>
               </div>
               <div className="list-row-right">
                 <span className="list-row-value">{classePrio.nome}</span>
@@ -1367,11 +1392,11 @@ function CardAporte({ ativos, alocacao }) {
       })()}
 
       {ativo1Obj && (
-        <CardAtivo ativo={ativo1Obj} soMeta titulo="Ativo Prioritário 1" />
+        <CardAtivo ativo={ativo1Obj} soMeta titulo="Ativo prioritário 1" />
       )}
 
       {ativo2Obj && (
-        <CardAtivo ativo={ativo2Obj} soMeta titulo="Ativo Prioritário 2" />
+        <CardAtivo ativo={ativo2Obj} soMeta titulo="Ativo prioritário 2" />
       )}
     </Card>
   );
@@ -1527,7 +1552,7 @@ function CardProventos({ proventos }) {
       </SubCard>
 
       <SubCard style={{ overflow: "hidden" }}>
-        <HeroValor titulo="Total Recebido" valor={fmtBRL(totalRecebido)} visible={!!totalRecebido} />
+        <HeroValor titulo="Total recebido" valor={fmtBRL(totalRecebido)} visible={!!totalRecebido} />
         <div className="card-header" style={{ margin: "var(--space-2) 0" }}>
           <SeletorAno anos={anosNumProventos} anoInicio={anoInicioProventos} onChange={setAnoInicioProventos} />
         </div>
@@ -1589,11 +1614,11 @@ function CardHeatmap({ ativos }) {
     <Card>
       <div className="card-header">
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-          <h2 className="card-titulo"><IconeCard nome="heatmap" />Mapa de Ativos</h2>
+          <h2 className="card-titulo"><IconeCard nome="heatmap" />Mapa de ativos</h2>
         </SubCard>
         {temMais && (
           <BotaoVer onClick={() => setOpen(o => !o)} open={open}>
-            {open ? "Ocultar" : "Ver Mais"}
+            {open ? "Ocultar" : "Ver mais"}
           </BotaoVer>
         )}
       </div>
@@ -1641,9 +1666,9 @@ function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = n
     : [
         { titulo: "Cotação",         chave: null,                    valor: ehUSD ? fmtUSD(cot) : fmtBRL(cot), cor: null        },
         { titulo: "Quantidade",      chave: null,                    valor: String(qtd),                         cor: null        },
-        { titulo: "Preço Médio",     chave: null,                    valor: ehUSD ? fmtUSD(pm) : fmtBRL(pm),   cor: null        },
-        { titulo: "Total Investido", chave: null,                    valor: fmtBRL(ti),                          cor: null        },
-        { titulo: "Total Atual",     chave: "total_atual",           valor: fmtBRL(ta),                          cor: null        },
+        { titulo: "Preço médio",     chave: null,                    valor: ehUSD ? fmtUSD(pm) : fmtBRL(pm),   cor: null        },
+        { titulo: "Total investido", chave: null,                    valor: fmtBRL(ti),                          cor: null        },
+        { titulo: "Total atual",     chave: "total_atual",           valor: fmtBRL(ta),                          cor: null        },
         { titulo: "Variação",        chave: "variacao_total",        valor: `${s}${fmtBRL(vt)}`,                cor: corVar(vt)  },
         { titulo: "Variação %",      chave: "variacao_percentual",   valor: `${s}${vpct.toFixed(2)}%`,          cor: corVar(vt)  },
         { titulo: "% Meta",          chave: null,                    valor: `${pmeta.toFixed(2)}%`,             cor: null        },
@@ -1789,14 +1814,14 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome={ICONE_POR_SUFIXO[sufixo]} />{titulo}</h2>
         </SubCard>
-        <BotaoVer onClick={() => setOpen(o => !o)} open={open}>{open ? "Ocultar" : "Ver Mais"}</BotaoVer>
+        <BotaoVer onClick={() => setOpen(o => !o)} open={open}>{open ? "Ocultar" : "Ver mais"}</BotaoVer>
       </div>
 
       <SubCard>
         {/* Total à esq, variação à dir — sem bloco */}
         <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
           <div className="list-row-left">
-            <span className="list-row-label">Total Em {titulo}</span>
+            <span className="list-row-label">Atual</span>
           </div>
           <div className="list-row-right">
             <span className="list-row-value">{fmtBRL(total)}</span>
@@ -1900,7 +1925,7 @@ async function salvarLancamentos(transactions, metaDespesa) {
   }
 }
 
-// ── Card Resumo (Total Líquido + Receitas/Despesas) ──
+// ── Card Resumo (Total líquido + Receitas/Despesas) ──
 
 function CardFinancasResumo({ totais }) {
   const corNet = corVar(totais.net);
@@ -1916,7 +1941,7 @@ function CardFinancasResumo({ totais }) {
       <SubCard>
         <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
           <div className="list-row-left">
-            <span className="list-row-label">Total Líquido</span>
+            <span className="list-row-label">Total líquido</span>
           </div>
           <div className="list-row-right">
             <span className="list-row-value" style={{ color: corNet }}>{fmtBRL(totais.net)}</span>
@@ -1925,13 +1950,13 @@ function CardFinancasResumo({ totais }) {
 
         <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
           <ListRow
-            label="Receitas Totais"
+            label="Receitas totais"
             value={fmtBRL(totais.income)}
             valueColor={COR_ALTA}
             plain
           />
           <ListRow
-            label="Despesas Totais"
+            label="Despesas totais"
             value={fmtBRL(totais.expense)}
             valueColor={COR_BAIXA}
             plain
@@ -1965,7 +1990,7 @@ function CardFinancasComparativo({ totais, lancamentos, onEditar }) {
 
       <SubCard>
         <div className="card-header" style={{ marginBottom: "var(--space-2)" }}>
-          <span className="campo-titulo">Receita vs Despesa</span>
+          <span className="campo-titulo">Receita vs despesa</span>
         </div>
 
         <div className="barra-track">
@@ -1977,7 +2002,7 @@ function CardFinancasComparativo({ totais, lancamentos, onEditar }) {
           <ListRow label={`Receitas (${pctIncome.toFixed(1)}%)`}  value={fmtBRL(totais.income)}  valueColor={COR_ALTA}  plain />
           <ListRow label={`Despesas (${pctExpense.toFixed(1)}%)`} value={fmtBRL(totais.expense)} valueColor={COR_BAIXA} plain />
           <ListRow
-            label={savingsRate > 0 ? "Está Sobrando" : savingsRate < 0 ? "Está Faltando" : "Está Ok"}
+            label={savingsRate > 0 ? "Está sobrando" : savingsRate < 0 ? "Está faltando" : "Está ok"}
             value={`${sinal(savingsRate)}${savingsRate.toFixed(0)}%`}
             valueColor={corVar(savingsRate)}
             plain
@@ -1991,14 +2016,17 @@ function CardFinancasComparativo({ totais, lancamentos, onEditar }) {
             {receitas.map(tx => (
               <div key={tx.id} className="list-row list-row-plain">
                 <div className="list-row-left">
-                  <span className="list-row-label">{tx.name}</span>
+                  <span className="list-row-label">{sentenceCase(tx.name)}</span>
                 </div>
                 <div className="list-row-right">
                   <span className="list-row-value" style={{ color: COR_ALTA }}>
                     +{fmtBRL(tx.value)}
                   </span>
-                  <button className="btn-ver" onClick={() => onEditar(tx)}>
-                    Editar
+                  <button className="btn-editar-icone" onClick={() => onEditar(tx)} aria-label="Editar" title="Editar">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -2029,7 +2057,12 @@ function CardFinancasMeta({ meta, gasto, onEditar, lancamentos, onEditarLancamen
       <SubCard>
         <div className="card-header" style={{ marginBottom: meta > 0 ? "var(--space-2)" : 0 }}>
           <span className="campo-titulo">{meta > 0 ? "Progresso do mês" : "Nenhuma meta definida"}</span>
-          <button className="btn-ver" onClick={onEditar}>{meta > 0 ? "Editar" : "Definir meta"}</button>
+          <button className="btn-editar-icone" onClick={onEditar} aria-label={meta > 0 ? "Editar" : "Definir meta"} title={meta > 0 ? "Editar" : "Definir meta"}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+            </svg>
+          </button>
         </div>
 
         {meta > 0 ? (
@@ -2062,14 +2095,17 @@ function CardFinancasMeta({ meta, gasto, onEditar, lancamentos, onEditarLancamen
             {despesas.map(tx => (
               <div key={tx.id} className="list-row list-row-plain">
                 <div className="list-row-left">
-                  <span className="list-row-label">{tx.name}</span>
+                  <span className="list-row-label">{sentenceCase(tx.name)}</span>
                 </div>
                 <div className="list-row-right">
                   <span className="list-row-value" style={{ color: COR_BAIXA }}>
                     −{fmtBRL(tx.value)}
                   </span>
-                  <button className="btn-ver" onClick={() => onEditarLancamento(tx)}>
-                    Editar
+                  <button className="btn-editar-icone" onClick={() => onEditarLancamento(tx)} aria-label="Editar" title="Editar">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+                    </svg>
                   </button>
                 </div>
               </div>
@@ -2100,7 +2136,7 @@ function ModalFinancas({ titulo, onFechar, children }) {
 
 function ModalLancamento({ form, editando, onChange, onSalvar, onExcluir, onFechar }) {
   return (
-    <ModalFinancas titulo={editando ? "Editar Lançamento" : "Novo Lançamento"} onFechar={onFechar}>
+    <ModalFinancas titulo={editando ? "Editar lançamento" : "Novo lançamento"} onFechar={onFechar}>
       <div className="tipo-toggle">
         <button
           className={`tipo-opcao${form.type === "income" ? " tipo-opcao-ativa income" : ""}`}
@@ -2120,7 +2156,7 @@ function ModalLancamento({ form, editando, onChange, onSalvar, onExcluir, onFech
         <label className="campo-titulo">Descrição</label>
         <input
           className="form-input"
-          placeholder="Ex: Salário, Aluguel..."
+          placeholder="Ex: salário, aluguel..."
           value={form.name}
           onChange={e => onChange({ ...form, name: e.target.value })}
         />
@@ -2139,7 +2175,7 @@ function ModalLancamento({ form, editando, onChange, onSalvar, onExcluir, onFech
       </div>
 
       <button className="form-botao" onClick={onSalvar}>
-        {editando ? "Salvar Alterações" : "Adicionar Lançamento"}
+        {editando ? "Salvar alterações" : "Adicionar lançamento"}
       </button>
 
       {editando && (
@@ -2153,7 +2189,7 @@ function ModalLancamento({ form, editando, onChange, onSalvar, onExcluir, onFech
 
 function ModalMeta({ valor, onChange, onSalvar, onLimpar, temMeta, onFechar }) {
   return (
-    <ModalFinancas titulo="Meta de Gastos" onFechar={onFechar}>
+    <ModalFinancas titulo="Meta de gastos" onFechar={onFechar}>
       <div className="form-grupo">
         <label className="campo-titulo">Valor da meta (R$)</label>
         <input
@@ -2166,7 +2202,7 @@ function ModalMeta({ valor, onChange, onSalvar, onLimpar, temMeta, onFechar }) {
         />
       </div>
 
-      <button className="form-botao" onClick={onSalvar}>Salvar Meta</button>
+      <button className="form-botao" onClick={onSalvar}>Salvar meta</button>
 
       {temMeta && (
         <button className="form-botao form-botao-secundario" onClick={onLimpar}>
@@ -3187,14 +3223,14 @@ function Style() {
         --row-pad-x: 0px;
       }
       /* Destaque do campo pelo qual a lista está sendo filtrada
-         (ex.: filtrar por "Total Atual" marca essa linha em todos os ativos) */
+         (ex.: filtrar por "Total atual" marca essa linha em todos os ativos) */
       .list-row-filtrado {
         margin: 0 -10px;
         padding-left: 10px;
         padding-right: 10px;
         border-radius: var(--radius-md);
-        background: rgba(19, 160, 151, 0.08);
-        box-shadow: inset 0 0 0 1px rgba(19, 160, 151, 0.5);
+        background: var(--hl-bg, rgba(19, 160, 151, 0.08));
+        box-shadow: inset 0 0 0 1px var(--hl-border, rgba(19, 160, 151, 0.5));
       }
       .list-row-filtrado::after {
         display: none !important;
@@ -3292,6 +3328,26 @@ function Style() {
       }
       .btn-filtro-simples-ativo {
         color: #0a5550;
+      }
+      .btn-editar-icone {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.55);
+        border: none;
+        padding: 4px;
+        margin-right: -4px;
+        margin-left: var(--space-2);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        transition: color 0.2s ease, background 0.2s ease;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .btn-editar-icone:hover,
+      .btn-editar-icone:active {
+        color: #0a5550;
+        background: rgba(10, 85, 80, 0.1);
       }
 
       @media (max-width: 640px) {
