@@ -440,8 +440,19 @@ function BotaoFiltroTrigger({ children, onClick, ativo, open }) {
       className={`btn-filtro-simples dropdown-trigger${ativo ? " btn-filtro-simples-ativo" : ""}`}
       onClick={handleClick}
       aria-expanded={open}
+      aria-label="Filtrar"
     >
-      <span ref={btnRef} className="btn-texto">{children}</span>
+      <span ref={btnRef} className="btn-texto">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="4" y1="6" x2="20" y2="6" />
+          <circle cx="9" cy="6" r="2" fill="var(--bg2)" />
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <circle cx="15" cy="12" r="2" fill="var(--bg2)" />
+          <line x1="4" y1="18" x2="20" y2="18" />
+          <circle cx="11" cy="18" r="2" fill="var(--bg2)" />
+        </svg>
+        {children}
+      </span>
       <svg className={`btn-ver-icon ${open ? "is-open" : ""}`} width="12" height="7" viewBox="0 0 12 7" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M1 1L6 6L11 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
@@ -449,7 +460,7 @@ function BotaoFiltroTrigger({ children, onClick, ativo, open }) {
   );
 }
 
-function BotaoVer({ children, onClick, open }) {
+function BotaoVer({ onClick, open }) {
   const btnRef = useRef(null);
 
   const handleClick = (e) => {
@@ -458,11 +469,24 @@ function BotaoVer({ children, onClick, open }) {
   };
 
   return (
-    <button className="btn-ver" onClick={handleClick}>
-      <span ref={btnRef} className="btn-texto">{children}</span>
-      <svg className={`btn-ver-icon ${open ? "is-open" : ""}`} width="12" height="7" viewBox="0 0 12 7" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M1 1L6 6L11 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
+    <button className="btn-ver" onClick={handleClick} aria-label={open ? "Ocultar" : "Ver mais"}>
+      <span ref={btnRef} className="btn-texto">
+        {open ? (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 3l18 18" />
+            <path d="M10.6 5.2A10.4 10.4 0 0 1 12 5c6 0 9.6 5.5 9.9 7 -.2.9-.9 2.4-2.1 3.8M6.5 6.6C3.9 8.1 2.3 10.5 2.1 12c.5 2.5 3.4 7 9.9 7 1.4 0 2.6-.2 3.7-.6" />
+            <path d="M9.5 9.6a3.3 3.3 0 0 0 4.6 4.7" />
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2.1 12c.5-2.5 4.1-7 9.9-7s9.4 4.5 9.9 7c-.5 2.5-4.1 7-9.9 7s-9.4-4.5-9.9-7Z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        )}
+        <svg className={`btn-ver-icon ${open ? "is-open" : ""}`} width="12" height="7" viewBox="0 0 12 7" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M1 1L6 6L11 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </span>
     </button>
   );
 }
@@ -954,8 +978,7 @@ function SeletorAno({ anos, anoInicio, onChange }) {
   return (
     <div className="dropdown-wrap" ref={triggerRef} style={{ marginLeft: "-6px" }}>
       <BotaoFiltroTrigger open={open} onClick={() => setOpen(o => !o)}>
-        Filtrar
-        <span className="dropdown-trigger-sub">· Desde {anoInicio}</span>
+        <span className="dropdown-trigger-sub">Desde {anoInicio}</span>
       </BotaoFiltroTrigger>
       {open && createPortal(
         <div
@@ -1617,9 +1640,7 @@ function CardHeatmap({ ativos }) {
           <h2 className="card-titulo"><IconeCard nome="heatmap" />Mapa de ativos</h2>
         </SubCard>
         {temMais && (
-          <BotaoVer onClick={() => setOpen(o => !o)} open={open}>
-            {open ? "Ocultar" : "Ver mais"}
-          </BotaoVer>
+          <BotaoVer onClick={() => setOpen(o => !o)} open={open} />
         )}
       </div>
       <SubCard>
@@ -1814,7 +1835,7 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome={ICONE_POR_SUFIXO[sufixo]} />{titulo}</h2>
         </SubCard>
-        <BotaoVer onClick={() => setOpen(o => !o)} open={open}>{open ? "Ocultar" : "Ver mais"}</BotaoVer>
+        <BotaoVer onClick={() => setOpen(o => !o)} open={open} />
       </div>
 
       <SubCard>
@@ -1854,10 +1875,9 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
               open={filtrosOpen}
               onClick={() => setFiltrosOpen(o => !o)}
             >
-              Filtrar
               {sortBy && (
                 <span className="dropdown-trigger-sub">
-                  · {FILTROS.find(f => f.key === sortBy)?.texto}
+                  {FILTROS.find(f => f.key === sortBy)?.texto}
                 </span>
               )}
             </BotaoFiltroTrigger>
@@ -2067,7 +2087,7 @@ function CardFinancasMeta({ meta, gasto, onEditar, lancamentos, onEditarLancamen
 
         {meta > 0 ? (
           <>
-            <BarraSimples pct={pct} cor={excedeu ? COR_BAIXA : "var(--accent-p)"} />
+            <BarraSimples pct={pct} cor={excedeu ? COR_BAIXA : COR_ALTA} />
             <div style={{ marginTop: "var(--space-3)", marginBottom: excedeu ? 0 : "calc(var(--space-4) * -1)" }}>
               <ListRow label="Meta definida" value={fmtBRL(meta)} plain />
               <ListRow label="Já gasto" value={fmtBRL(gasto)} valueColor={excedeu ? COR_BAIXA : undefined} plain />
@@ -3331,7 +3351,7 @@ function Style() {
       }
       .btn-editar-icone {
         background: transparent;
-        color: rgba(255, 255, 255, 0.55);
+        color: #ffffff;
         border: none;
         padding: 4px;
         margin-right: -4px;
@@ -3347,7 +3367,6 @@ function Style() {
       .btn-editar-icone:hover,
       .btn-editar-icone:active {
         color: #0a5550;
-        background: rgba(10, 85, 80, 0.1);
       }
 
       @media (max-width: 640px) {
