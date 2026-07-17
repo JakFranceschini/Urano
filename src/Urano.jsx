@@ -2154,7 +2154,7 @@ function ModalFinancas({ titulo, onFechar, children }) {
   );
 }
 
-function ModalLancamento({ form, editando, onChange, onSalvar, onExcluir, onFechar }) {
+function ModalLancamento({ form, editando, onChange, onSalvar, onExcluir, onFechar, formatarValor }) {
   return (
     <ModalFinancas titulo={editando ? "Editar lançamento" : "Novo lançamento"} onFechar={onFechar}>
       <div className="tipo-toggle">
@@ -2190,7 +2190,7 @@ function ModalLancamento({ form, editando, onChange, onSalvar, onExcluir, onFech
           inputMode="numeric"
           placeholder="0,00"
           value={form.value}
-          onChange={e => onChange({ ...form, value: e.target.value })}
+          onChange={e => onChange({ ...form, value: formatarValor(e.target.value) })}
         />
       </div>
 
@@ -2337,6 +2337,7 @@ function PaginaFinancas({ lancamentos, setLancamentos, metaDespesa, setMetaDespe
           onSalvar={salvarLancamento}
           onExcluir={excluirLancamento}
           onFechar={() => setModalAberto(false)}
+          formatarValor={formatarBRL}
         />
       )}
 
