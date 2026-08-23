@@ -21,6 +21,7 @@ const CLASSES_ATIVOS = [
   { classe: "reit",    titulo: "Reits",    sufixo: "reits"    },
   { classe: "acao",    titulo: "Ações",    sufixo: "acoes"    },
   { classe: "fii",     titulo: "Fiis",     sufixo: "fiis"     },
+  { classe: "etf",     titulo: "Etfs",     sufixo: "etfs"     },
   { classe: "bitcoin", titulo: "Bitcoins", sufixo: "bitcoins" },
 ];
 
@@ -69,6 +70,10 @@ function fmtUSD(v) {
 }
 
 function sinal(v) { return v > 0 ? "+" : ""; }
+
+// sinalCompleto — como sinal(), mas também retorna "-" para valores negativos.
+// Usar quando o valor exibido em seguida já passou por Math.abs() (perde o sinal nativo).
+function sinalCompleto(v) { return v > 0 ? "+" : v < 0 ? "-" : ""; }
 
 // Converte um texto para sentence case: primeira letra maiúscula, restante minúsculo
 // (para uma única palavra, aplica a mesma regra: só a primeira letra em maiúscula).
@@ -211,6 +216,14 @@ function IconeCard({ nome, size = 21 }) {
           <path d="M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2" />
         </svg>
       );
+    case "etf": // etfs — cesta de compras
+      return (
+        <svg {...p} className="card-titulo-icone">
+          <path d="M8 9c0-3 1.8-5 4-5s4 2 4 5" />
+          <path d="M5 9h14l-1.6 10.2a2 2 0 0 1-2 1.8H8.6a2 2 0 0 1-2-1.8L5 9Z" />
+          <path d="M9.5 13v4M12 13v4M14.5 13v4" />
+        </svg>
+      );
     case "acao": // ações br — candlestick
       return (
         <svg {...p} className="card-titulo-icone">
@@ -291,7 +304,7 @@ function IconeCard({ nome, size = 21 }) {
 
 // Mapa sufixo → ícone, usado pelos cards de classe de ativo (Stocks, Reits, etc.)
 const ICONE_POR_SUFIXO = {
-  stocks: "stock", reits: "reit", acoes: "acao", fiis: "fii", bitcoins: "bitcoin",
+  stocks: "stock", reits: "reit", etfs: "etf", acoes: "acao", fiis: "fii", bitcoins: "bitcoin",
 };
 
 // ── Outros Componentes Menores ────────────────────────────────────────────────
@@ -1166,7 +1179,7 @@ function CardReserva({ reservas, alocacao, totais }) {
             <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
               <ListRow
                 label={`${tituloValorD} (${pctVariacao.toFixed(1)}%)`}
-                value={fmtBRL(valorD)}
+                value={`${sinalCompleto(valorDiferenca)}${fmtBRL(valorD)}`}
                 valueColor={corDiferenca}
                 plain
               />
@@ -1185,7 +1198,7 @@ function CardReserva({ reservas, alocacao, totais }) {
 
 // ── Card Resumo de Investimentos ──────────────────────────────────────────────
 // Soma total_atual / total_aportado / variação de todas as classes de ativos
-// (stocks, reits, ações, fiis, bitcoins) — não inclui reservas.
+// (stocks, reits, etfs, ações, fiis, bitcoins) — não inclui reservas.
 
 function CardResumoInvestimentos({ totais }) {
   if (!totais?.length) return null;
@@ -1341,6 +1354,7 @@ function CardAporte({ ativos, alocacao }) {
   const APORTE_MAP = {
     stock:   ["alocacao_ideal_stocks",   "alocacao_atual_stocks"  ],
     reit:    ["alocacao_ideal_reits",    "alocacao_atual_reits"   ],
+    etf:     ["alocacao_ideal_etfs",     "alocacao_atual_etfs"    ],
     acao:    ["alocacao_ideal_acoes",    "alocacao_atual_acoes"   ],
     fii:     ["alocacao_ideal_fiis",     "alocacao_atual_fiis"    ],
     bitcoin: ["alocacao_ideal_bitcoins", "alocacao_atual_bitcoins"],
@@ -1352,6 +1366,7 @@ function CardAporte({ ativos, alocacao }) {
     { classe: "reit",    nome: "Reits"    },
     { classe: "acao",    nome: "Ações"    },
     { classe: "fii",     nome: "Fiis"     },
+    { classe: "etf",     nome: "Etfs"     },
     { classe: "bitcoin", nome: "Bitcoins" },
     { classe: "reserva", nome: "Reservas" },
   ];
@@ -1404,7 +1419,7 @@ function CardAporte({ ativos, alocacao }) {
                 <ListRow label="Meta" value={`${classePrio.ideal.toFixed(1)}%`} plain />
                 <ListRow
                   label="Faltando"
-                  value={`${classePrio.diff.toFixed(1)}%`}
+                  value={`-${classePrio.diff.toFixed(1)}%`}
                   valueColor={COR_BAIXA}
                   plain
                 />
@@ -1662,7 +1677,7 @@ function CardHeatmap({ ativos }) {
 // ── Card Individual de Ativo ──────────────────────────────────────────────────
 
 function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = null }) {
-  const ehUSD = ["stock", "reit"].includes(String(ativo.classe).toLowerCase().trim());
+  const ehUSD = ["stock", "reit", "etf"].includes(String(ativo.classe).toLowerCase().trim());
   const cot   = toFloat(ativo.cotacao);
   const qtd   = toFloat(ativo.quantidade);
   const pm    = toFloat(ativo.preco_medio);
@@ -1676,7 +1691,7 @@ function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = n
 
   const textoSF = psf > 0 ? "Sobrando" : psf < 0 ? "Faltando" : "Ok";
   const s   = sinal(vt);
-  const ssf = sinal(psf);
+  const ssf = sinalCompleto(psf);
 
   const metricas = soMeta
     ? [
@@ -1854,7 +1869,7 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
           <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
             <ListRow
               label={`Variação (${pctVariacao.toFixed(1)}%)`}
-              value={`${sinal(diff)}${fmtBRL(Math.abs(diff))}`}
+              value={`${sinalCompleto(diff)}${fmtBRL(Math.abs(diff))}`}
               valueColor={corDiff}
               plain
             />
@@ -1964,20 +1979,20 @@ function CardFinancasResumo({ totais }) {
             <span className="list-row-label">Total líquido</span>
           </div>
           <div className="list-row-right">
-            <span className="list-row-value" style={{ color: corNet }}>{fmtBRL(totais.net)}</span>
+            <span className="list-row-value" style={{ color: corNet }}>{`${sinalCompleto(totais.net)}${fmtBRL(Math.abs(totais.net))}`}</span>
           </div>
         </div>
 
         <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
           <ListRow
             label="Receitas totais"
-            value={fmtBRL(totais.income)}
+            value={`+${fmtBRL(totais.income)}`}
             valueColor={COR_ALTA}
             plain
           />
           <ListRow
             label="Despesas totais"
-            value={fmtBRL(totais.expense)}
+            value={`-${fmtBRL(totais.expense)}`}
             valueColor={COR_BAIXA}
             plain
           />
@@ -2019,8 +2034,8 @@ function CardFinancasComparativo({ totais, lancamentos, onEditar }) {
         </div>
 
         <div style={{ marginTop: "var(--space-3)", marginBottom: "calc(var(--space-4) * -1)" }}>
-          <ListRow label={`Receitas (${pctIncome.toFixed(1)}%)`}  value={fmtBRL(totais.income)}  valueColor={COR_ALTA}  plain />
-          <ListRow label={`Despesas (${pctExpense.toFixed(1)}%)`} value={fmtBRL(totais.expense)} valueColor={COR_BAIXA} plain />
+          <ListRow label={`Receitas (${pctIncome.toFixed(1)}%)`}  value={`+${fmtBRL(totais.income)}`}  valueColor={COR_ALTA}  plain />
+          <ListRow label={`Despesas (${pctExpense.toFixed(1)}%)`} value={`-${fmtBRL(totais.expense)}`} valueColor={COR_BAIXA} plain />
           <ListRow
             label={savingsRate > 0 ? "Está sobrando" : savingsRate < 0 ? "Está faltando" : "Está ok"}
             value={`${sinal(savingsRate)}${savingsRate.toFixed(0)}%`}
@@ -2090,10 +2105,10 @@ function CardFinancasMeta({ meta, gasto, onEditar, lancamentos, onEditarLancamen
             <BarraSimples pct={pct} cor={excedeu ? COR_BAIXA : COR_ALTA} />
             <div style={{ marginTop: "var(--space-3)", marginBottom: excedeu ? 0 : "calc(var(--space-4) * -1)" }}>
               <ListRow label="Meta definida" value={fmtBRL(meta)} plain />
-              <ListRow label="Já gasto" value={fmtBRL(gasto)} valueColor={excedeu ? COR_BAIXA : undefined} plain />
+              <ListRow label="Já gasto" value={`-${fmtBRL(gasto)}`} valueColor={excedeu ? COR_BAIXA : undefined} plain />
               <ListRow
                 label={excedeu ? "Ultrapassou em" : "Ainda pode gastar"}
-                value={fmtBRL(Math.abs(restante))}
+                value={`${sinalCompleto(restante)}${fmtBRL(Math.abs(restante))}`}
                 valueColor={excedeu ? COR_BAIXA : COR_ALTA}
                 plain
               />
@@ -2119,7 +2134,7 @@ function CardFinancasMeta({ meta, gasto, onEditar, lancamentos, onEditarLancamen
                 </div>
                 <div className="list-row-right">
                   <span className="list-row-value" style={{ color: COR_BAIXA }}>
-                    −{fmtBRL(tx.value)}
+                    -{fmtBRL(tx.value)}
                   </span>
                   <button className="btn-editar-icone" onClick={() => onEditarLancamento(tx)} aria-label="Editar" title="Editar">
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
