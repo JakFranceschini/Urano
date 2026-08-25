@@ -48,7 +48,7 @@ const FILTROS = [
 
 const COR_ALTA        = "#0a5550"; // Verde escuro — lucro
 const COR_BAIXA       = "#8a3535"; // Vermelho — prejuízo
-const PALETA_ALOCACAO = ["#0a5550","#0c6560","#0e7971","#10908a","#13a097","#16b8ae"];
+const PALETA_ALOCACAO = ["#094945","#0b605b","#0e7771","#118d86","#13a49c","#16bdb4","#19d7cb"];
 
 // Espessura/altura padrão de TODAS as barras de progresso/composição do app
 // → definida no token CSS --bar-altura (ver :root), não como constante JS.
