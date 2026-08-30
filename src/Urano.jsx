@@ -2544,7 +2544,7 @@ function ModalAtivo({ ticker, form, onChange, onSalvar, onLimpar, temDados, onFe
   );
 }
 
-function ModalReserva({ valor, metaPct, onChangeValor, onChangeMeta, onSalvar, onFechar }) {
+function ModalReserva({ valor, onChangeValor, onSalvar, onFechar }) {
   return (
     <ModalFinancas titulo="Editar reserva" onFechar={onFechar}>
       <div className="form-grupo">
@@ -2556,18 +2556,6 @@ function ModalReserva({ valor, metaPct, onChangeValor, onChangeMeta, onSalvar, o
           placeholder="0,00"
           value={valor}
           onChange={e => onChangeValor(e.target.value)}
-        />
-      </div>
-
-      <div className="form-grupo">
-        <label className="campo-titulo">% Meta (do patrimônio total)</label>
-        <input
-          className="form-input"
-          type="text"
-          inputMode="decimal"
-          placeholder="0"
-          value={metaPct}
-          onChange={e => onChangeMeta(e.target.value)}
         />
       </div>
 
@@ -2812,7 +2800,6 @@ export default function App() {
 
   const [reservaModalAberto, setReservaModalAberto] = useState(false);
   const [formReserva, setFormReserva]                 = useState("");
-  const [formReservaMeta, setFormReservaMeta]         = useState("");
 
   const [metasModalAberto, setMetasModalAberto] = useState(false);
   const [formMetas, setFormMetas]                 = useState({});
@@ -2933,7 +2920,6 @@ export default function App() {
 
   function abrirEdicaoReserva() {
     setFormReserva(numParaTexto(dadosLocais.reserva_atual));
-    setFormReservaMeta(numParaTexto(dadosLocais.metas.reservas));
     setReservaModalAberto(true);
   }
 
@@ -2941,7 +2927,6 @@ export default function App() {
     setDadosLocais(prev => ({
       ...prev,
       reserva_atual: toFloat(formReserva),
-      metas: { ...prev.metas, reservas: toFloat(formReservaMeta) },
     }));
     setReservaModalAberto(false);
   }
@@ -3106,9 +3091,7 @@ export default function App() {
       {reservaModalAberto && (
         <ModalReserva
           valor={formReserva}
-          metaPct={formReservaMeta}
           onChangeValor={setFormReserva}
-          onChangeMeta={setFormReservaMeta}
           onSalvar={salvarReserva}
           onFechar={() => setReservaModalAberto(false)}
         />
