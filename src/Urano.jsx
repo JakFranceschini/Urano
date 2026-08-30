@@ -1,20 +1,33 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { createPortal } from "react-dom";
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
-
-// ── Constantes ────────────────────────────────────────────────────────────────
+import ativosPadrao from "./ativos.json";
+import proventosPadrao from "./proventos.json";
+import evolucaoPadrao from "./evolucao.json";
 
 const SHEET_BASE =
   "https://docs.google.com/spreadsheets/d/1sSujoT_tUBA0bHWRpn0aDf59cGpU0tTg3AVzBnFgbUo/export?format=csv&gid=";
 
 const SHEET_GIDS = {
-  ativos:    "0",
-  evolucao:  "321025695",
-  totais:    "1590878666",
-  reservas:  "1376608033",
-  alocacao:  "947935505",
-  proventos: "1266693739",
+  ativos: "0",
 };
+
+const LOCAL_STORAGE_KEY = "urano_dados_locais";
+
+const SEED_ATIVOS_URL    = "/dados/ativos.json";
+const SEED_PROVENTOS_URL = "/dados/proventos.json";
+const SEED_EVOLUCAO_URL  = "/dados/evolucao.json";
+
+function dadosLocaisPadrao() {
+  return {
+    ativos: { ...ativosPadrao },
+    reserva_atual: 0,
+    metas: { stocks: 0, reits: 0, acoes: 0, fiis: 0, etfs: 0, bitcoins: 0, reservas: 0 },
+    proventos: [...proventosPadrao],
+
+    evolucao: [...evolucaoPadrao],
+  };
+}
 
 const CLASSES_ATIVOS = [
   { classe: "stock",   titulo: "Stocks",   sufixo: "stocks"   },
@@ -25,13 +38,11 @@ const CLASSES_ATIVOS = [
   { classe: "bitcoin", titulo: "Bitcoins", sufixo: "bitcoins" },
 ];
 
-// ALOCACAO_CLASSES = todas as classes de ativos + reservas (usada nos cards de Alocação e Aporte)
 const ALOCACAO_CLASSES = [
   ...CLASSES_ATIVOS.map(({ sufixo, titulo }) => ({ sufixo, titulo })),
   { sufixo: "reservas", titulo: "Reservas" },
 ];
 
-// Páginas do app (abas do navbar)
 const PAGINAS = [
   { id: "patrimonio",     titulo: "Patrimônio"    },
   { id: "investimentos",  titulo: "Investimentos" },
@@ -46,14 +57,9 @@ const FILTROS = [
   { texto: "% Atual",    key: "porcentagem_atual"   },
 ];
 
-const COR_ALTA        = "#0a5550"; // Verde escuro — lucro
-const COR_BAIXA       = "#8a3535"; // Vermelho — prejuízo
+const COR_ALTA        = "#0a5550";
+const COR_BAIXA       = "#8a3535";
 const PALETA_ALOCACAO = ["#094945","#0b605b","#0e7771","#118d86","#13a49c","#16bdb4","#19d7cb"];
-
-// Espessura/altura padrão de TODAS as barras de progresso/composição do app
-// → definida no token CSS --bar-altura (ver :root), não como constante JS.
-
-// ── Funções Auxiliares ────────────────────────────────────────────────────────
 
 function toFloat(v) {
   const s = String(v ?? "0").replace(",", ".");
@@ -71,12 +77,8 @@ function fmtUSD(v) {
 
 function sinal(v) { return v > 0 ? "+" : ""; }
 
-// sinalCompleto — como sinal(), mas também retorna "-" para valores negativos.
-// Usar quando o valor exibido em seguida já passou por Math.abs() (perde o sinal nativo).
 function sinalCompleto(v) { return v > 0 ? "+" : v < 0 ? "-" : ""; }
 
-// Converte um texto para sentence case: primeira letra maiúscula, restante minúsculo
-// (para uma única palavra, aplica a mesma regra: só a primeira letra em maiúscula).
 function sentenceCase(str) {
   const s = String(str ?? "");
   const idx = s.search(/\p{L}/u);
@@ -91,18 +93,41 @@ function corVar(v) {
 }
 
 function corHeatmap(pct) {
-  // Verde: quanto mais lucro, mais escuro
-  if (pct >= 100) return "#063d3a"; // > 100%      → mais escuro
-  if (pct >= 50)  return "#0a5550"; // 50–100%     → escuro médio
-  if (pct >= 20)  return "#0e7971"; // 20–50%      → médio
-  if (pct >= 0)   return "#16b8ae"; // 0–20%       → mais claro
-  // Vermelho: quanto mais prejuízo, mais escuro
-  if (pct >= -20) return "#c0504a"; // 0 a -20%    → mais claro
-  if (pct >= -50) return "#8a3535"; // -20 a -50%  → médio
-  return "#4f1f1f";                 // -50 a -100% → mais escuro
+
+  if (pct >= 100) return "#063d3a";
+  if (pct >= 50)  return "#0a5550";
+  if (pct >= 20)  return "#0e7971";
+  if (pct >= 0)   return "#16b8ae";
+
+  if (pct >= -20) return "#c0504a";
+  if (pct >= -50) return "#8a3535";
+  return "#4f1f1f";
 }
 
-// ── Funções de Parse ──────────────────────────────────────────────────────────
+function calcularEvolucaoComDiferenca(evolucaoBase, totalPatrimonioAtual) {
+  const anoAtual = String(new Date().getFullYear());
+
+  const linhas = (evolucaoBase ?? [])
+    .map(r => ({ ano: String(r.ano ?? "").trim(), valor: toFloat(r.valor) }))
+    .filter(r => r.ano)
+    .sort((a, b) => parseInt(a.ano, 10) - parseInt(b.ano, 10));
+
+  if (totalPatrimonioAtual != null) {
+    const idxAtual = linhas.findIndex(r => r.ano === anoAtual);
+    if (idxAtual >= 0) {
+      linhas[idxAtual] = { ano: anoAtual, valor: totalPatrimonioAtual };
+    } else {
+      linhas.push({ ano: anoAtual, valor: totalPatrimonioAtual });
+      linhas.sort((a, b) => parseInt(a.ano, 10) - parseInt(b.ano, 10));
+    }
+  }
+
+  return linhas.map((r, i) => ({
+    ano: r.ano,
+    valor: r.valor,
+    diferenca: i === 0 ? r.valor : r.valor - linhas[i - 1].valor,
+  }));
+}
 
 function parseCSV(text) {
   const lines = text.trim().split("\n");
@@ -129,7 +154,133 @@ async function fetchSheet(gid) {
   return parseCSV(t);
 }
 
-// ── Componentes Base ──────────────────────────────────────────────────────────
+function carregarDadosLocais() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (!raw) return dadosLocaisPadrao();
+    const salvo = JSON.parse(raw);
+
+    const ativosSalvos = salvo.ativos ?? {};
+    const ativos = Object.keys(ativosSalvos).length > 0 ? ativosSalvos : { ...ativosPadrao };
+    const proventosSalvos = salvo.proventos ?? [];
+    const proventos = proventosSalvos.length > 0 ? proventosSalvos : [...proventosPadrao];
+    const evolucaoSalva = salvo.evolucao ?? [];
+    const evolucao = evolucaoSalva.length > 0 ? evolucaoSalva : [...evolucaoPadrao];
+    return {
+      ...dadosLocaisPadrao(),
+      ...salvo,
+      ativos,
+      proventos,
+      evolucao,
+      metas: { ...dadosLocaisPadrao().metas, ...(salvo.metas ?? {}) },
+    };
+  } catch {
+    return dadosLocaisPadrao();
+  }
+}
+
+function salvarDadosLocais(dadosLocais) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dadosLocais));
+  } catch (err) {
+    console.error("Erro ao salvar dados locais:", err);
+  }
+}
+
+const CLASSES_EM_DOLAR = ["stock", "reit", "etf"];
+
+function montarAtivos(ativosPlanilha, dadosLocais) {
+
+  const linhaMoeda = (ativosPlanilha ?? []).find(
+    row => String(row.ticker ?? "").trim().toLowerCase() === "dolar"
+  );
+  const taxaDolar = linhaMoeda ? toFloat(linhaMoeda.cotacao) : 1;
+
+  const semPercentuais = (ativosPlanilha ?? [])
+    .filter(row => String(row.ticker ?? "").trim().toLowerCase() !== "dolar")
+    .map(row => {
+    const ticker = String(row.ticker ?? "").trim();
+    const cotacao = toFloat(row.cotacao);
+    const extra = dadosLocais.ativos[ticker] ?? {};
+    const quantidade = toFloat(extra.quantidade);
+    const preco_medio = toFloat(extra.preco_medio);
+    const classe = String(extra.classe || "").toLowerCase().trim();
+
+    const taxa = CLASSES_EM_DOLAR.includes(classe) ? taxaDolar : 1;
+    const total_investido = quantidade * preco_medio * taxa;
+    const total_atual = quantidade * cotacao * taxa;
+    const variacao_total = total_atual - total_investido;
+    const variacao_percentual = total_investido > 0 ? (variacao_total / total_investido) * 100 : 0;
+
+    return {
+      ticker,
+      cotacao,
+      nome: extra.nome || ticker,
+      classe,
+      quantidade,
+      preco_medio,
+      porcentagem_meta: toFloat(extra.porcentagem_meta),
+      total_investido,
+      total_atual,
+      variacao_total,
+      variacao_percentual,
+    };
+  });
+
+  const totalPorClasse = {};
+  semPercentuais.forEach(a => {
+    totalPorClasse[a.classe] = (totalPorClasse[a.classe] ?? 0) + a.total_atual;
+  });
+
+  return semPercentuais.map(a => {
+    const totalClasse = totalPorClasse[a.classe] ?? 0;
+    const porcentagem_atual = totalClasse > 0 ? (a.total_atual / totalClasse) * 100 : 0;
+    const porcentagem_sobrando_faltando = porcentagem_atual - a.porcentagem_meta;
+    return { ...a, porcentagem_atual, porcentagem_sobrando_faltando };
+  });
+}
+
+function calcularTotais(ativos, reservaAtual) {
+  const t = {};
+  let totalInvestimentos = 0;
+  let aportadoInvestimentos = 0;
+
+  CLASSES_ATIVOS.forEach(({ classe, sufixo }) => {
+    const doClasse = ativos.filter(a => a.classe === classe);
+    const total    = doClasse.reduce((s, a) => s + a.total_atual, 0);
+    const aportado = doClasse.reduce((s, a) => s + a.total_investido, 0);
+    t[`total_${sufixo}`]          = total;
+    t[`total_aportado_${sufixo}`] = aportado;
+    t[`diferenca_${sufixo}`]      = total - aportado;
+    totalInvestimentos    += total;
+    aportadoInvestimentos += aportado;
+  });
+
+  const totalPatrimonio    = totalInvestimentos + reservaAtual;
+  const aportadoPatrimonio = aportadoInvestimentos + reservaAtual;
+  t.total_patrimonio             = totalPatrimonio;
+  t.total_aportado               = aportadoPatrimonio;
+  t.total_diferenca_patrimonio   = totalPatrimonio - aportadoPatrimonio;
+
+  return [t];
+}
+
+function calcularAlocacao(totais, reservaAtual, metas) {
+  const t = totais[0] ?? {};
+  const totalPatrimonio = toFloat(t.total_patrimonio);
+  const a = {};
+
+  ALOCACAO_CLASSES.forEach(({ sufixo }) => {
+    const valorAtual = sufixo === "reservas" ? reservaAtual : toFloat(t[`total_${sufixo}`]);
+    const pctAtual    = totalPatrimonio > 0 ? (valorAtual / totalPatrimonio) * 100 : 0;
+    const pctIdeal    = toFloat(metas[sufixo]);
+    a[`alocacao_atual_${sufixo}`]      = pctAtual;
+    a[`alocacao_ideal_${sufixo}`]      = pctIdeal;
+    a[`alocacao_diferenca_${sufixo}`]  = pctAtual - pctIdeal;
+  });
+
+  return [a];
+}
 
 function Card({ children, className = "", style = {} }) {
   return (
@@ -139,15 +290,13 @@ function Card({ children, className = "", style = {} }) {
   );
 }
 
-// IconeCard — ícone exibido ao lado do título de cada card, no mesmo estilo
-// (stroke fino, currentColor) dos demais ícones do app.
 function IconeCard({ nome, size = 21 }) {
   const p = {
     width: size, height: size, viewBox: "0 0 24 24", fill: "none",
     stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round",
   };
   switch (nome) {
-    case "patrimonio": // cifrão em círculo
+    case "patrimonio":
       return (
         <svg {...p} className="card-titulo-icone">
           <circle cx="12" cy="12" r="9" />
@@ -156,41 +305,41 @@ function IconeCard({ nome, size = 21 }) {
           </text>
         </svg>
       );
-    case "reserva": // escudo
+    case "reserva":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3Z" />
         </svg>
       );
-    case "investimentos": // gráfico de linha ascendente em moldura
+    case "investimentos":
       return (
         <svg {...p} className="card-titulo-icone">
           <rect x="3" y="3" width="18" height="18" rx="2.5" />
           <path d="M6.5 15l4-4 3 3 4.5-5.5" />
         </svg>
       );
-    case "alocacao": // gráfico de pizza
+    case "alocacao":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M21.5 12A9.5 9.5 0 1 1 9 2.6" />
           <path d="M21.5 12A9.5 9.5 0 0 0 12 2.5V12Z" />
         </svg>
       );
-    case "aporte": // seta de crescimento
+    case "aporte":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M3 17l6-6 4 4 7-8" />
           <path d="M14 6h6v6" />
         </svg>
       );
-    case "proventos": // moedas
+    case "proventos":
       return (
         <svg {...p} className="card-titulo-icone">
           <circle cx="9" cy="9" r="5.5" />
           <circle cx="15.5" cy="15.5" r="5.5" />
         </svg>
       );
-    case "heatmap": // grade
+    case "heatmap":
       return (
         <svg {...p} className="card-titulo-icone">
           <rect x="3" y="3" width="7.5" height="7.5" rx="1.2" />
@@ -199,7 +348,7 @@ function IconeCard({ nome, size = 21 }) {
           <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.2" />
         </svg>
       );
-    case "stock": // ações internacionais — barras
+    case "stock":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M3 3v18h18" />
@@ -208,7 +357,7 @@ function IconeCard({ nome, size = 21 }) {
           <rect x="17" y="5" width="3" height="13" />
         </svg>
       );
-    case "reit": // reits — prédio
+    case "reit":
       return (
         <svg {...p} className="card-titulo-icone">
           <rect x="4" y="3" width="16" height="18" rx="1" />
@@ -216,7 +365,7 @@ function IconeCard({ nome, size = 21 }) {
           <path d="M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2" />
         </svg>
       );
-    case "etf": // etfs — cesta de compras
+    case "etf":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M8 9c0-3 1.8-5 4-5s4 2 4 5" />
@@ -224,7 +373,7 @@ function IconeCard({ nome, size = 21 }) {
           <path d="M9.5 13v4M12 13v4M14.5 13v4" />
         </svg>
       );
-    case "acao": // ações br — candlestick
+    case "acao":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M6 3v4M6 13v8" />
@@ -235,7 +384,7 @@ function IconeCard({ nome, size = 21 }) {
           <rect x="15.5" y="9" width="5" height="7" rx="0.5" />
         </svg>
       );
-    case "fii": // fiis — casa
+    case "fii":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M3 11l9-8 9 8" />
@@ -243,7 +392,7 @@ function IconeCard({ nome, size = 21 }) {
           <path d="M9 20v-6h6v6" />
         </svg>
       );
-    case "bitcoin": // bitcoin
+    case "bitcoin":
       return (
         <svg {...p} className="card-titulo-icone">
           <circle cx="12" cy="12" r="9" />
@@ -252,7 +401,7 @@ function IconeCard({ nome, size = 21 }) {
           </text>
         </svg>
       );
-    case "financas": // carteira
+    case "financas":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3" />
@@ -260,7 +409,7 @@ function IconeCard({ nome, size = 21 }) {
           <path d="M16 12h4v4h-4a2 2 0 0 1 0-4Z" />
         </svg>
       );
-    case "comparativo": // duas barras
+    case "comparativo":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M3 3v18h18" />
@@ -268,7 +417,7 @@ function IconeCard({ nome, size = 21 }) {
           <rect x="14" y="6" width="4" height="12" />
         </svg>
       );
-    case "meta": // alvo
+    case "meta":
       return (
         <svg {...p} className="card-titulo-icone">
           <circle cx="12" cy="12" r="9" />
@@ -276,21 +425,21 @@ function IconeCard({ nome, size = 21 }) {
           <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
         </svg>
       );
-    case "seta-cima": // seta para cima
+    case "seta-cima":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M12 19V5" />
           <path d="M5 12l7-7 7 7" />
         </svg>
       );
-    case "seta-baixo": // seta para baixo
+    case "seta-baixo":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M12 5v14" />
           <path d="M5 12l7 7 7-7" />
         </svg>
       );
-    case "lancamentos": // lista
+    case "lancamentos":
       return (
         <svg {...p} className="card-titulo-icone">
           <path d="M8 6h13M8 12h13M8 18h13" />
@@ -302,12 +451,9 @@ function IconeCard({ nome, size = 21 }) {
   }
 }
 
-// Mapa sufixo → ícone, usado pelos cards de classe de ativo (Stocks, Reits, etc.)
 const ICONE_POR_SUFIXO = {
   stocks: "stock", reits: "reit", etfs: "etf", acoes: "acao", fiis: "fii", bitcoins: "bitcoin",
 };
-
-// ── Outros Componentes Menores ────────────────────────────────────────────────
 
 function SubCard({ children, className = "", style = {}, id }) {
   return (
@@ -317,8 +463,6 @@ function SubCard({ children, className = "", style = {}, id }) {
   );
 }
 
-// HeroValor — bloco "título pequeno + valor grande em destaque" usado em todos
-// os cards com número principal (Patrimônio, Patrimônio USD, Classe prioritária, etc.)
 function HeroValor({ titulo, valor, cor, visible = true, className = "" }) {
   return (
     <div className={`hero-valor ${className}`}>
@@ -338,7 +482,6 @@ function HeroValor({ titulo, valor, cor, visible = true, className = "" }) {
   );
 }
 
-// BarraSimples — barra de progresso de um único segmento (0 a 100%)
 function BarraSimples({ pct, cor, style = {} }) {
   return (
     <div className="barra-track" style={style}>
@@ -347,7 +490,6 @@ function BarraSimples({ pct, cor, style = {} }) {
   );
 }
 
-// Tile — mini card de legenda/estatística padronizado (grade de alocação, listas de métricas, etc.)
 function Tile({ cor, titulo, valor, diff, metaPct, metaLabel, isHover, onHoverStart, onHoverEnd, onClick }) {
   return (
     <div
@@ -403,11 +545,10 @@ function ListRow({ label, tag, value, valueColor, sub, subColor, onClick, onMous
   );
 }
 
-// criarBrilho — efeito de "brilho" ao clicar, usado nos botões de filtro e "Ver mais"
 function criarBrilho(e, btn) {
   if (!btn) return;
   btn.classList.remove("click-glow");
-  // Força reflow para permitir reiniciar a animação em cliques consecutivos
+
   void btn.offsetWidth;
   btn.classList.add("click-glow");
   const onEnd = () => {
@@ -507,11 +648,6 @@ function BotaoVer({ onClick, open }) {
 function Expandable({ open, children }) {
   const wrapRef = useRef(null);
 
-  // O container (.card/.subcard) usa `gap` no flexbox. Um wrapper com height:0
-  // ainda soma esse gap ANTES e DEPOIS dele, dobrando o espaço vazio no lugar
-  // onde ele está — por isso cards com Expandable no fim pareciam ter mais
-  // padding no final do que cards sem Expandable. Neutralizamos isso aplicando
-  // uma margem negativa igual ao gap do pai sempre que o conteúdo está fechado.
   const getParentGap = (el) => {
     const parent = el?.parentElement;
     if (!parent) return 0;
@@ -566,8 +702,6 @@ function Expandable({ open, children }) {
     </div>
   );
 }
-
-// ── Spinner / Loading / Logo ──────────────────────────────────────────────────
 
 function Spinner() {
   return (
@@ -648,7 +782,6 @@ function Navbar({ scrolled, ativos, onSelectTicker, pagina, onNavigate, onNovoLa
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // Fecha busca ao clicar fora
   useEffect(() => {
     if (!searchOpen) return;
     const handler = (e) => {
@@ -661,7 +794,6 @@ function Navbar({ scrolled, ativos, onSelectTicker, pagina, onNavigate, onNovoLa
     return () => document.removeEventListener("mousedown", handler);
   }, [searchOpen]);
 
-  // Trava o scroll do fundo e permite fechar com Esc enquanto o menu overlay está aberto
   useEffect(() => {
     if (!menuAberto) return;
     const prevOverflow = document.body.style.overflow;
@@ -674,12 +806,10 @@ function Navbar({ scrolled, ativos, onSelectTicker, pagina, onNavigate, onNovoLa
     };
   }, [menuAberto]);
 
-  // Foca input ao abrir busca
   useEffect(() => {
     if (searchOpen) setTimeout(() => inputRef.current?.focus(), 50);
   }, [searchOpen]);
 
-  // Resultados de busca
   const resultados = query.trim().length >= 1
     ? (ativos ?? []).filter(a =>
         String(a.ticker ?? "").toLowerCase().includes(query.toLowerCase()) ||
@@ -692,7 +822,7 @@ function Navbar({ scrolled, ativos, onSelectTicker, pagina, onNavigate, onNovoLa
       <div className="navbar-inner">
 
         <div className="navbar-left">
-          {/* Logo + título */}
+
           {logoErr ? (
             <span className="navbar-logo">L</span>
           ) : (
@@ -719,7 +849,6 @@ function Navbar({ scrolled, ativos, onSelectTicker, pagina, onNavigate, onNovoLa
 
         <div className="navbar-right">
 
-        {/* Menu hambúrguer — substitui as abas de navegação em telas pequenas, alinhado à direita */}
         <div className="navbar-hamburger-wrap" ref={menuRef}>
           <button
             className="btn-tema navbar-hamburger"
@@ -774,7 +903,6 @@ function Navbar({ scrolled, ativos, onSelectTicker, pagina, onNavigate, onNovoLa
           )}
         </div>
 
-        {/* Botão de novo lançamento — exibido apenas na página de Finanças */}
         {pagina === "financas" && (
           <button
             className="btn-tema"
@@ -789,7 +917,6 @@ function Navbar({ scrolled, ativos, onSelectTicker, pagina, onNavigate, onNovoLa
           </button>
         )}
 
-        {/* Busca — inline no desktop, botão no mobile (exibida apenas na página de Investimentos) */}
         {pagina === "investimentos" && (
         <div style={{ position: "relative" }} ref={searchRef}>
           {isMobile ? (
@@ -930,8 +1057,6 @@ function Navbar({ scrolled, ativos, onSelectTicker, pagina, onNavigate, onNovoLa
   );
 }
 
-// ── Botão Flutuante Voltar ao Topo ────────────────────────────────────────────
-
 function BotaoTopoFlutuante({ scrolled, onTop }) {
   return (
     <button
@@ -948,9 +1073,6 @@ function BotaoTopoFlutuante({ scrolled, onTop }) {
   );
 }
 
-// ── Seletor de Ano (filtro dos gráficos de evolução) ──────────────────────────
-// Mostra os dados "a partir do ano X até agora". Padrão: últimos 8 anos.
-
 const ANOS_PADRAO_HISTORICO = 8;
 
 function SeletorAno({ anos, anoInicio, onChange }) {
@@ -962,8 +1084,7 @@ function SeletorAno({ anos, anoInicio, onChange }) {
   const atualizarPos = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    // Mesmo comportamento do menu "Filtros": começa na borda esquerda do
-    // botão e se estende para a direita.
+
     setPos({ top: rect.bottom + 8, left: rect.left });
   }, []);
 
@@ -1015,42 +1136,114 @@ function SeletorAno({ anos, anoInicio, onChange }) {
   );
 }
 
-// ── Card Patrimônio ───────────────────────────────────────────────────────────
+function SeletorForm({ value, onChange, options, placeholder = "Selecione..." }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
 
-function CardPatrimonio({ totais, proventos, evolucao }) {
-  // ── Evolução (gráfico incorporado ao card de Patrimônio) ──
-  const temEvolucao = !!evolucao?.length;
-  const anos    = temEvolucao ? Object.keys(evolucao[0]).filter(k => /^\d{4}$/.test(k)) : [];
-  const anosNumEvolucao = anos.map(a => parseInt(a, 10)).filter(n => !isNaN(n)).sort((a, b) => a - b);
+  const atualizarPos = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPos({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    atualizarPos();
+    const handleClickFora = (e) => {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target) &&
+        menuRef.current && !menuRef.current.contains(e.target)
+      ) setOpen(false);
+    };
+    window.addEventListener("scroll", atualizarPos, true);
+    window.addEventListener("resize", atualizarPos);
+    document.addEventListener("mousedown", handleClickFora);
+    return () => {
+      window.removeEventListener("scroll", atualizarPos, true);
+      window.removeEventListener("resize", atualizarPos);
+      document.removeEventListener("mousedown", handleClickFora);
+    };
+  }, [open, atualizarPos]);
+
+  const selecionado = options.find(o => o.value === value);
+
+  return (
+    <div ref={triggerRef}>
+      <button
+        type="button"
+        className={`form-input form-select${open ? " form-select-aberto" : ""}`}
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span style={{ color: selecionado ? "var(--color-value)" : "var(--color-label)" }}>
+          {selecionado ? selecionado.label : placeholder}
+        </span>
+      </button>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          className="dropdown-menu dropdown-menu-flutuante dropdown-menu-select"
+          style={{ top: pos.top, left: pos.left, width: pos.width }}
+        >
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              className={`dropdown-item${o.value === value ? " is-ativo" : ""}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
+function CardPatrimonio({ totais, evolucao, onEditarEvolucao }) {
+
+  const total = toFloat(totais?.[0]?.total_patrimonio);
+
+  const dataEvolucaoBruta = calcularEvolucaoComDiferenca(evolucao, total)
+    .map(row => ({ ano: row.ano, valor: row.valor, diff: row.diferenca }));
+  const temEvolucao = dataEvolucaoBruta.length > 0;
+  const anosNumEvolucao = dataEvolucaoBruta.map(d => parseInt(d.ano, 10)).filter(n => !isNaN(n));
   const anoAtualNum = new Date().getFullYear();
   const [anoInicioEvolucao, setAnoInicioEvolucao] = useState(anoAtualNum - (ANOS_PADRAO_HISTORICO - 1));
 
-  if (!totais?.length || !proventos?.length) return null;
+  if (!totais?.length) return null;
   const t = totais[0];
-  const total    = toFloat(t.total_patrimonio);
   const aportado = toFloat(t.total_aportado);
   const diff     = toFloat(t.total_diferenca_patrimonio);
 
   const corDiff = corVar(diff);
-  // barra: variação como % do aportado (base = 100% aportado)
+
   const pctVariacao  = aportado > 0 ? Math.abs(diff) / aportado * 100 : 0;
   const pctAportado  = Math.max(100 - pctVariacao, 0);
 
-  const rowDiff = evolucao?.[1] ?? {};
-  const dataEvolucaoCompleta = anos.map(ano => ({
-    ano,
-    valor: toFloat(evolucao[0][ano]),
-    diff:  toFloat(rowDiff[ano] ?? 0),
-  }));
-  const dataEvolucao = dataEvolucaoCompleta.filter(d => parseInt(d.ano, 10) >= anoInicioEvolucao);
+  const dataEvolucao = dataEvolucaoBruta.filter(d => parseInt(d.ano, 10) >= anoInicioEvolucao);
 
   return (
     <Card>
-      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
+      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+        <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="patrimonio" />Patrimônio</h2>
-        </div>
-      </SubCard>
+        </SubCard>
+        {onEditarEvolucao && (
+          <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
+            <button className="btn-editar-icone" onClick={onEditarEvolucao} aria-label="Editar evolução do patrimônio" title="Editar evolução do patrimônio" style={{ margin: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+              </svg>
+            </button>
+          </SubCard>
+        )}
+      </div>
 
       <SubCard>
         <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
@@ -1062,7 +1255,6 @@ function CardPatrimonio({ totais, proventos, evolucao }) {
           </div>
         </div>
 
-        {/* Legenda no estilo de lista, sem card ao redor */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
           <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
             <ListRow
@@ -1110,8 +1302,6 @@ function CardPatrimonio({ totais, proventos, evolucao }) {
   );
 }
 
-// ── Tooltip Personalizado para Gráficos ───────────────────────────────────────
-
 function CustomTooltipEvolucao({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
@@ -1137,32 +1327,39 @@ function EvolucaoXTick({ x, y, payload }) {
   );
 }
 
-// ── Card Reserva ──────────────────────────────────────────────────────────────
-
-function CardReserva({ reservas, alocacao, totais }) {
+function CardReserva({ reservas, alocacao, totais, onEditar }) {
   if (!reservas?.length || !alocacao?.length) return null;
   const r = reservas[0], a = alocacao[0];
   const aktual   = toFloat(r.reserva_atual);
   const pctIdeal = toFloat(a.alocacao_ideal_reservas);
 
   const totalPatrimonio = toFloat(totais?.[0]?.total_patrimonio);
-  const valorIdeal       = totalPatrimonio * pctIdeal / 100;
-  const valorDiferenca   = aktual - valorIdeal;
-  const tituloValorD     = valorDiferenca > 0 ? "Sobrando" : valorDiferenca < 0 ? "Faltando" : "Equilibrada";
+  const valorIdeal      = totalPatrimonio * pctIdeal / 100;
+  const valorDiferenca  = aktual - valorIdeal;
+  const textoSF         = valorDiferenca > 0 ? "Sobrando" : valorDiferenca < 0 ? "Faltando" : "Ok";
   const valorD           = Math.abs(valorDiferenca);
-  const corDiferenca     = valorDiferenca > 0 ? COR_ALTA : valorDiferenca < 0 ? COR_BAIXA : "var(--color-neutral)";
+  const corDiferenca     = corVar(valorDiferenca);
+  const ssf               = sinalCompleto(valorDiferenca);
 
-  // barra: diferença como % do valor ideal (base = 100% ideal)
   const pctVariacao = valorIdeal > 0 ? Math.abs(valorDiferenca) / valorIdeal * 100 : 0;
-  const pctBase     = Math.max(100 - pctVariacao, 0);
 
   return (
     <Card>
-      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
+      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+        <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="reserva" />Reserva</h2>
-        </div>
-      </SubCard>
+        </SubCard>
+        {onEditar && (
+          <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
+            <button className="btn-editar-icone" onClick={onEditar} aria-label="Editar reserva" title="Editar reserva" style={{ margin: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+              </svg>
+            </button>
+          </SubCard>
+        )}
+      </div>
 
       <SubCard>
         <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
@@ -1174,31 +1371,25 @@ function CardReserva({ reservas, alocacao, totais }) {
           </div>
         </div>
 
-        {valorIdeal > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
-            <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
-              <ListRow
-                label={`${tituloValorD} (${pctVariacao.toFixed(1)}%)`}
-                value={`${sinalCompleto(valorDiferenca)}${fmtBRL(valorD)}`}
-                valueColor={corDiferenca}
-                plain
-              />
-              <ListRow
-                label={`Ideal (${pctBase.toFixed(1)}%)`}
-                value={fmtBRL(valorIdeal)}
-                plain
-              />
-            </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+          <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
+            <ListRow
+              label={`${textoSF}${pctVariacao > 0 ? ` (${pctVariacao.toFixed(1)}%)` : ""}`}
+              value={`${ssf}${fmtBRL(valorD)}`}
+              valueColor={corDiferenca}
+              plain
+            />
+            <ListRow
+              label={`Meta (${pctIdeal.toFixed(1)}%)`}
+              value={fmtBRL(valorIdeal)}
+              plain
+            />
           </div>
-        )}
+        </div>
       </SubCard>
     </Card>
   );
 }
-
-// ── Card Resumo de Investimentos ──────────────────────────────────────────────
-// Soma total_atual / total_aportado / variação de todas as classes de ativos
-// (stocks, reits, etfs, ações, fiis, bitcoins) — não inclui reservas.
 
 function CardResumoInvestimentos({ totais }) {
   if (!totais?.length) return null;
@@ -1209,7 +1400,7 @@ function CardResumoInvestimentos({ totais }) {
   const diff     = CLASSES_ATIVOS.reduce((acc, c) => acc + toFloat(t[`diferenca_${c.sufixo}`]), 0);
 
   const corDiff = corVar(diff);
-  // barra: variação como % do aportado (base = 100% aportado)
+
   const pctVariacao = aportado > 0 ? Math.abs(diff) / aportado * 100 : 0;
   const pctAportado = Math.max(100 - pctVariacao, 0);
 
@@ -1251,14 +1442,12 @@ function CardResumoInvestimentos({ totais }) {
   );
 }
 
-// ── Card Alocação ─────────────────────────────────────────────────────────────
-
 function BarraAlocacao({ dados, onHoverItem, hoveredIdx }) {
   const total = dados.reduce((s, d) => s + d.pct, 0) || 1;
 
   return (
     <SubCard>
-      {/* Barra principal */}
+
       <div style={{ display: "flex", height: 36, borderRadius: "var(--radius-md)", overflow: "hidden", gap: 2 }}>
         {dados.map((d, i) => {
           const isHov = hoveredIdx === i;
@@ -1285,7 +1474,6 @@ function BarraAlocacao({ dados, onHoverItem, hoveredIdx }) {
         })}
       </div>
 
-      {/* Lista de classes — mesmo padrão de list-row usado no resto do app, com divisórias entre itens */}
       <div style={{ marginTop: "var(--space-3)", marginBottom: "calc(var(--space-4) * -1)" }}>
         {dados.map((d, i) => {
           const cor = PALETA_ALOCACAO[i % PALETA_ALOCACAO.length];
@@ -1319,7 +1507,7 @@ function BarraAlocacao({ dados, onHoverItem, hoveredIdx }) {
   );
 }
 
-function CardAlocacao({ alocacao }) {
+function CardAlocacao({ alocacao, onEditar }) {
   const [hoveredIdx, setHoveredIdx] = useState(null);
   if (!alocacao?.length) return null;
   const a = alocacao[0];
@@ -1334,18 +1522,26 @@ function CardAlocacao({ alocacao }) {
 
   return (
     <Card>
-      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
+      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+        <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="alocacao" />Alocação</h2>
-        </div>
-      </SubCard>
+        </SubCard>
+        {onEditar && (
+          <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
+            <button className="btn-editar-icone" onClick={onEditar} aria-label="Editar metas de alocação" title="Editar metas de alocação" style={{ margin: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+              </svg>
+            </button>
+          </SubCard>
+        )}
+      </div>
 
       <BarraAlocacao dados={dados} onHoverItem={setHoveredIdx} hoveredIdx={hoveredIdx} />
     </Card>
   );
 }
-
-// ── Card Aporte ───────────────────────────────────────────────────────────────
 
 function CardAporte({ ativos, alocacao }) {
   if (!ativos?.length || !alocacao?.length) return null;
@@ -1412,7 +1608,6 @@ function CardAporte({ ativos, alocacao }) {
               </div>
             </div>
 
-            {/* Legenda em linha única, igual ao card Reserva de Emergência */}
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
               <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
                 <ListRow label="Atual" value={`${classePrio.atual.toFixed(1)}%`} plain />
@@ -1439,8 +1634,6 @@ function CardAporte({ ativos, alocacao }) {
     </Card>
   );
 }
-
-// ── Card Proventos ────────────────────────────────────────────────────────────
 
 function GraficoProventos({ porAno }) {
   const [hovIdx, setHovIdx] = useState(null);
@@ -1564,30 +1757,37 @@ function GraficoProventos({ porAno }) {
   );
 }
 
-function CardProventos({ proventos }) {
-  const anosNumProventos = (proventos ?? [])
-    .map(row => parseInt(row.ano, 10))
-    .filter(n => !isNaN(n))
-    .sort((a, b) => a - b);
+function CardProventos({ proventos, onEditar }) {
+  const porAnoCompleto = (proventos ?? [])
+    .map(row => ({ ano: String(row.ano ?? ""), valor: toFloat(row.total_ano) }))
+    .filter(r => r.ano)
+    .sort((a, b) => parseInt(a.ano, 10) - parseInt(b.ano, 10));
+  const anosNumProventos = porAnoCompleto.map(row => parseInt(row.ano, 10)).filter(n => !isNaN(n));
   const anoAtualNum = new Date().getFullYear();
   const [anoInicioProventos, setAnoInicioProventos] = useState(anoAtualNum - (ANOS_PADRAO_HISTORICO - 1));
 
   if (!proventos?.length) return null;
 
-  const totalRecebido = toFloat(proventos[0]?.total_recebido ?? 0);
-  const porAnoCompleto = proventos.map(row => ({
-    ano:   String(row.ano ?? ""),
-    valor: toFloat(row.total_ano),
-  })).filter(r => r.ano);
+  const totalRecebido = porAnoCompleto.reduce((s, r) => s + r.valor, 0);
   const porAno = porAnoCompleto.filter(d => parseInt(d.ano, 10) >= anoInicioProventos);
 
   return (
     <Card>
-      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
+      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+        <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="proventos" />Proventos</h2>
-        </div>
-      </SubCard>
+        </SubCard>
+        {onEditar && (
+          <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
+            <button className="btn-editar-icone" onClick={onEditar} aria-label="Editar proventos" title="Editar proventos" style={{ margin: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+              </svg>
+            </button>
+          </SubCard>
+        )}
+      </div>
 
       <SubCard style={{ overflow: "hidden" }}>
         <HeroValor titulo="Total recebido" valor={fmtBRL(totalRecebido)} visible={!!totalRecebido} />
@@ -1599,8 +1799,6 @@ function CardProventos({ proventos }) {
     </Card>
   );
 }
-
-// ── Heatmap de Ativos ─────────────────────────────────────────────────────────
 
 function HeatmapCell({ ativo }) {
   const [imgErr, setImgErr] = useState(false);
@@ -1634,8 +1832,6 @@ function HeatmapCell({ ativo }) {
     </div>
   );
 }
-
-// ── Card Heatmap ──────────────────────────────────────────────────────────────
 
 function CardHeatmap({ ativos }) {
   const [open, setOpen] = useState(false);
@@ -1674,9 +1870,7 @@ function CardHeatmap({ ativos }) {
   );
 }
 
-// ── Card Individual de Ativo ──────────────────────────────────────────────────
-
-function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = null }) {
+function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = null, onEditar = null }) {
   const ehUSD = ["stock", "reit", "etf"].includes(String(ativo.classe).toLowerCase().trim());
   const cot   = toFloat(ativo.cotacao);
   const qtd   = toFloat(ativo.quantidade);
@@ -1748,6 +1942,14 @@ function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = n
               </div>
               <div className="ativo-nome-texto">{ativo.nome}</div>
             </div>
+            {onEditar && (
+              <button className="btn-editar-icone" onClick={() => onEditar(ativo)} aria-label="Editar ativo" title="Editar ativo">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+                </svg>
+              </button>
+            )}
           </div>
 
           <div className="divisor" />
@@ -1763,16 +1965,13 @@ function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = n
   );
 }
 
-// ── Card de Classe (Stocks, Reits, etc.) ──────────────────────────────────────
-
-function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, searchVersion, scrollRef }) {
+function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, searchVersion, scrollRef, onEditarAtivo }) {
   const [open, setOpen]               = useState(false);
   const [sortBy, setSortBy]           = useState(null);
   const [sortDir, setSortDir]         = useState("asc");
   const [filtrosOpen, setFiltrosOpen] = useState(false);
   const [highlightTicker, setHighlightTicker] = useState(null);
 
-  // Quando um ticker é selecionado pela busca
   useEffect(() => {
     if (!selectedTicker || !searchVersion) return;
     const pertenceAessa = (ativos ?? []).some(a =>
@@ -1854,7 +2053,7 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
       </div>
 
       <SubCard>
-        {/* Total à esq, variação à dir — sem bloco */}
+
         <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
           <div className="list-row-left">
             <span className="list-row-label">Atual</span>
@@ -1864,7 +2063,6 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
           </div>
         </div>
 
-        {/* Legenda simples */}
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
             <ListRow
@@ -1884,7 +2082,7 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
 
       <Expandable open={open}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
-          {/* Dropdown "Filtros" — usado em qualquer tamanho de tela ── */}
+
           <div className="dropdown-wrap">
             <BotaoFiltroTrigger
               open={filtrosOpen}
@@ -1915,15 +2113,13 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
             )}
           </div>
           <div className="ativos-lista">
-            {df.map((at, i) => <CardAtivo key={i} ativo={at} highlight={at.ticker === highlightTicker} sortBy={sortBy} />)}
+            {df.map((at, i) => <CardAtivo key={i} ativo={at} highlight={at.ticker === highlightTicker} sortBy={sortBy} onEditar={onEditarAtivo} />)}
           </div>
         </div>
       </Expandable>
     </Card>
   );
 }
-
-// ── Página de Finanças (ex-Netuno) ────────────────────────────────────────────
 
 const FINANCAS_API_URL = "https://script.google.com/macros/s/AKfycbwJsa0yUSpzKtQ-LRWrI9LnppE5U-4ZpFlphaf_Kd-ze8gbqdoiJnkhuSibS6OgIG8dPA/exec";
 
@@ -1937,7 +2133,7 @@ async function carregarLancamentos() {
   try {
     const res = await fetch(FINANCAS_API_URL);
     const data = await res.json();
-    // Formato novo: { transactions, metaDespesa }. Mantém compatibilidade com formato antigo (array puro).
+
     if (Array.isArray(data)) return { transactions: data, metaDespesa: 0 };
     return {
       transactions: Array.isArray(data.transactions) ? data.transactions : [],
@@ -1952,7 +2148,7 @@ async function salvarLancamentos(transactions, metaDespesa) {
   try {
     await fetch(FINANCAS_API_URL, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" }, // evita preflight CORS
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ transactions, metaDespesa }),
     });
   } catch (err) {
@@ -1960,10 +2156,18 @@ async function salvarLancamentos(transactions, metaDespesa) {
   }
 }
 
-// ── Card Resumo (Total líquido + Receitas/Despesas) ──
-
-function CardFinancasResumo({ totais }) {
+function CardFinancasResumo({ totais, meta, gasto, onEditarMeta }) {
   const corNet = corVar(totais.net);
+
+  const compareTotal = totais.income + totais.expense || 1;
+  const pctIncome  = (totais.income  / compareTotal) * 100;
+  const pctExpense = (totais.expense / compareTotal) * 100;
+  const savingsRate = totais.income > 0 ? ((totais.income - totais.expense) / totais.income) * 100 : 0;
+  const temDados = totais.income > 0 || totais.expense > 0;
+
+  const restante = meta - gasto;
+  const excedeu  = meta > 0 && gasto > meta;
+  const pct      = meta > 0 ? Math.min((gasto / meta) * 100, 100) : 0;
 
   return (
     <Card>
@@ -1998,101 +2202,35 @@ function CardFinancasResumo({ totais }) {
           />
         </div>
       </SubCard>
-    </Card>
-  );
-}
 
-// ── Card Comparativo (Receitas vs Despesas) ──
-
-function CardFinancasComparativo({ totais, lancamentos, onEditar }) {
-  const compareTotal = totais.income + totais.expense || 1;
-  const pctIncome  = (totais.income  / compareTotal) * 100;
-  const pctExpense = (totais.expense / compareTotal) * 100;
-  const savingsRate = totais.income > 0 ? ((totais.income - totais.expense) / totais.income) * 100 : 0;
-  const temDados = totais.income > 0 || totais.expense > 0;
-
-  if (!temDados) return null;
-
-  const receitas = lancamentos.filter(t => t.type === "income");
-
-  return (
-    <Card>
-      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
-          <h2 className="card-titulo"><IconeCard nome="seta-cima" />Receitas</h2>
-        </div>
-      </SubCard>
-
-      <SubCard>
-        <div className="card-header" style={{ marginBottom: "var(--space-2)" }}>
-          <span className="campo-titulo">Receita vs despesa</span>
-        </div>
-
-        <div className="barra-track">
-          <div className="barra-fill left"  style={{ width: `${pctIncome}%`,  background: COR_ALTA  }} title={`Receitas: ${pctIncome.toFixed(1)}%`} />
-          <div className="barra-fill right" style={{ width: `${pctExpense}%`, background: COR_BAIXA }} title={`Despesas: ${pctExpense.toFixed(1)}%`} />
-        </div>
-
-        <div style={{ marginTop: "var(--space-3)", marginBottom: "calc(var(--space-4) * -1)" }}>
-          <ListRow label={`Receitas (${pctIncome.toFixed(1)}%)`}  value={`+${fmtBRL(totais.income)}`}  valueColor={COR_ALTA}  plain />
-          <ListRow label={`Despesas (${pctExpense.toFixed(1)}%)`} value={`-${fmtBRL(totais.expense)}`} valueColor={COR_BAIXA} plain />
-          <ListRow
-            label={savingsRate > 0 ? "Está sobrando" : savingsRate < 0 ? "Está faltando" : "Está ok"}
-            value={`${sinal(savingsRate)}${savingsRate.toFixed(0)}%`}
-            valueColor={corVar(savingsRate)}
-            plain
-          />
-        </div>
-      </SubCard>
-
-      {receitas.length > 0 && (
+      {temDados && (
         <SubCard>
-          <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
-            {receitas.map(tx => (
-              <div key={tx.id} className="list-row list-row-plain">
-                <div className="list-row-left">
-                  <span className="list-row-label">{sentenceCase(tx.name)}</span>
-                </div>
-                <div className="list-row-right">
-                  <span className="list-row-value" style={{ color: COR_ALTA }}>
-                    +{fmtBRL(tx.value)}
-                  </span>
-                  <button className="btn-editar-icone" onClick={() => onEditar(tx)} aria-label="Editar" title="Editar">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="card-header" style={{ marginBottom: "var(--space-2)" }}>
+            <span className="campo-titulo">Receita vs despesa</span>
+          </div>
+
+          <div className="barra-track">
+            <div className="barra-fill left"  style={{ width: `${pctIncome}%`,  background: COR_ALTA  }} title={`Receitas: ${pctIncome.toFixed(1)}%`} />
+            <div className="barra-fill right" style={{ width: `${pctExpense}%`, background: COR_BAIXA }} title={`Despesas: ${pctExpense.toFixed(1)}%`} />
+          </div>
+
+          <div style={{ marginTop: "var(--space-3)", marginBottom: "calc(var(--space-4) * -1)" }}>
+            <ListRow label={`Receitas (${pctIncome.toFixed(1)}%)`}  value={`+${fmtBRL(totais.income)}`}  valueColor={COR_ALTA}  plain />
+            <ListRow label={`Despesas (${pctExpense.toFixed(1)}%)`} value={`-${fmtBRL(totais.expense)}`} valueColor={COR_BAIXA} plain />
+            <ListRow
+              label={savingsRate > 0 ? "Está sobrando" : savingsRate < 0 ? "Está faltando" : "Está ok"}
+              value={`${sinal(savingsRate)}${savingsRate.toFixed(0)}%`}
+              valueColor={corVar(savingsRate)}
+              plain
+            />
           </div>
         </SubCard>
       )}
-    </Card>
-  );
-}
-
-// ── Card Meta de Gastos ──
-
-function CardFinancasMeta({ meta, gasto, onEditar, lancamentos, onEditarLancamento }) {
-  const restante  = meta - gasto;
-  const excedeu   = meta > 0 && gasto > meta;
-  const pct       = meta > 0 ? Math.min((gasto / meta) * 100, 100) : 0;
-  const despesas  = lancamentos.filter(t => t.type === "expense");
-
-  return (
-    <Card>
-      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
-          <h2 className="card-titulo"><IconeCard nome="seta-baixo" />Despesas</h2>
-        </div>
-      </SubCard>
 
       <SubCard>
         <div className="card-header" style={{ marginBottom: meta > 0 ? "var(--space-2)" : 0 }}>
           <span className="campo-titulo">{meta > 0 ? "Progresso do mês" : "Nenhuma meta definida"}</span>
-          <button className="btn-editar-icone" onClick={onEditar} aria-label={meta > 0 ? "Editar" : "Definir meta"} title={meta > 0 ? "Editar" : "Definir meta"}>
+          <button className="btn-editar-icone" onClick={onEditarMeta} aria-label={meta > 0 ? "Editar" : "Definir meta"} title={meta > 0 ? "Editar" : "Definir meta"}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 20h9" />
               <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
@@ -2103,7 +2241,7 @@ function CardFinancasMeta({ meta, gasto, onEditar, lancamentos, onEditarLancamen
         {meta > 0 ? (
           <>
             <BarraSimples pct={pct} cor={excedeu ? COR_BAIXA : COR_ALTA} />
-            <div style={{ marginTop: "var(--space-3)", marginBottom: excedeu ? 0 : "calc(var(--space-4) * -1)" }}>
+            <div style={{ marginTop: "var(--space-3)", marginBottom: "calc(var(--space-4) * -1)" }}>
               <ListRow label="Meta definida" value={fmtBRL(meta)} plain />
               <ListRow label="Já gasto" value={`-${fmtBRL(gasto)}`} valueColor={excedeu ? COR_BAIXA : undefined} plain />
               <ListRow
@@ -2113,46 +2251,92 @@ function CardFinancasMeta({ meta, gasto, onEditar, lancamentos, onEditarLancamen
                 plain
               />
             </div>
-            {excedeu && (
-              <div className="campo-titulo" style={{ color: COR_BAIXA, marginTop: "var(--space-2)" }}>
-                ⚠ Você ultrapassou a meta de gastos
-              </div>
-            )}
           </>
         ) : (
           <div className="campo-titulo">Defina um limite mensal para acompanhar seus gastos.</div>
         )}
       </SubCard>
-
-      {despesas.length > 0 && (
-        <SubCard>
-          <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
-            {despesas.map(tx => (
-              <div key={tx.id} className="list-row list-row-plain">
-                <div className="list-row-left">
-                  <span className="list-row-label">{sentenceCase(tx.name)}</span>
-                </div>
-                <div className="list-row-right">
-                  <span className="list-row-value" style={{ color: COR_BAIXA }}>
-                    -{fmtBRL(tx.value)}
-                  </span>
-                  <button className="btn-editar-icone" onClick={() => onEditarLancamento(tx)} aria-label="Editar" title="Editar">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </SubCard>
-      )}
     </Card>
   );
 }
 
-// ── Modal genérico (adicionar/editar lançamento, definir meta) ──
+function CardFinancasComparativo({ lancamentos, onEditar }) {
+  const receitas = lancamentos.filter(t => t.type === "income");
+
+  if (receitas.length === 0) return null;
+
+  return (
+    <Card>
+      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
+        <div className="card-header">
+          <h2 className="card-titulo"><IconeCard nome="seta-cima" />Receitas</h2>
+        </div>
+      </SubCard>
+
+      <SubCard>
+        <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
+          {receitas.map(tx => (
+            <div key={tx.id} className="list-row list-row-plain">
+              <div className="list-row-left">
+                <span className="list-row-label">{sentenceCase(tx.name)}</span>
+              </div>
+              <div className="list-row-right">
+                <span className="list-row-value" style={{ color: COR_ALTA }}>
+                  +{fmtBRL(tx.value)}
+                </span>
+                <button className="btn-editar-icone" onClick={() => onEditar(tx)} aria-label="Editar" title="Editar">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SubCard>
+    </Card>
+  );
+}
+
+function CardFinancasMeta({ lancamentos, onEditarLancamento }) {
+  const despesas = lancamentos.filter(t => t.type === "expense");
+
+  if (despesas.length === 0) return null;
+
+  return (
+    <Card>
+      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
+        <div className="card-header">
+          <h2 className="card-titulo"><IconeCard nome="seta-baixo" />Despesas</h2>
+        </div>
+      </SubCard>
+
+      <SubCard>
+        <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
+          {despesas.map(tx => (
+            <div key={tx.id} className="list-row list-row-plain">
+              <div className="list-row-left">
+                <span className="list-row-label">{sentenceCase(tx.name)}</span>
+              </div>
+              <div className="list-row-right">
+                <span className="list-row-value" style={{ color: COR_BAIXA }}>
+                  -{fmtBRL(tx.value)}
+                </span>
+                <button className="btn-editar-icone" onClick={() => onEditarLancamento(tx)} aria-label="Editar" title="Editar">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SubCard>
+    </Card>
+  );
+}
 
 function ModalFinancas({ titulo, onFechar, children }) {
   return createPortal(
@@ -2248,7 +2432,198 @@ function ModalMeta({ valor, onChange, onSalvar, onLimpar, temMeta, onFechar }) {
   );
 }
 
-// ── Página de Finanças — componente principal ──
+function ModalAtivo({ ticker, form, onChange, onSalvar, onLimpar, temDados, onFechar }) {
+  return (
+    <ModalFinancas titulo={`Editar ${String(ticker).toUpperCase()}`} onFechar={onFechar}>
+      <div className="form-grupo">
+        <label className="campo-titulo">Nome</label>
+        <input
+          className="form-input"
+          placeholder="Ex: Apple Inc."
+          value={form.nome}
+          onChange={e => onChange({ ...form, nome: e.target.value })}
+        />
+      </div>
+
+      <div className="form-grupo">
+        <label className="campo-titulo">Classe</label>
+        <SeletorForm
+          value={form.classe}
+          onChange={v => onChange({ ...form, classe: v })}
+          options={CLASSES_ATIVOS.map(c => ({ value: c.classe, label: c.titulo }))}
+        />
+      </div>
+
+      <div className="form-grupo">
+        <label className="campo-titulo">Quantidade</label>
+        <input
+          className="form-input"
+          type="text"
+          inputMode="decimal"
+          placeholder="0"
+          value={form.quantidade}
+          onChange={e => onChange({ ...form, quantidade: e.target.value })}
+        />
+      </div>
+
+      <div className="form-grupo">
+        <label className="campo-titulo">Preço médio</label>
+        <input
+          className="form-input"
+          type="text"
+          inputMode="decimal"
+          placeholder="0,00"
+          value={form.preco_medio}
+          onChange={e => onChange({ ...form, preco_medio: e.target.value })}
+        />
+      </div>
+
+      <div className="form-grupo">
+        <label className="campo-titulo">% Meta (dentro da classe)</label>
+        <input
+          className="form-input"
+          type="text"
+          inputMode="decimal"
+          placeholder="0"
+          value={form.porcentagem_meta}
+          onChange={e => onChange({ ...form, porcentagem_meta: e.target.value })}
+        />
+      </div>
+
+      <button className="form-botao" onClick={onSalvar}>Salvar alterações</button>
+
+      {temDados && (
+        <button className="form-botao form-botao-perigo" onClick={onLimpar}>
+          Remover cadastro deste ativo
+        </button>
+      )}
+    </ModalFinancas>
+  );
+}
+
+function ModalReserva({ valor, metaPct, onChangeValor, onChangeMeta, onSalvar, onFechar }) {
+  return (
+    <ModalFinancas titulo="Editar reserva" onFechar={onFechar}>
+      <div className="form-grupo">
+        <label className="campo-titulo">Valor atual da reserva (R$)</label>
+        <input
+          className="form-input"
+          type="text"
+          inputMode="numeric"
+          placeholder="0,00"
+          value={valor}
+          onChange={e => onChangeValor(e.target.value)}
+        />
+      </div>
+
+      <div className="form-grupo">
+        <label className="campo-titulo">% Meta (do patrimônio total)</label>
+        <input
+          className="form-input"
+          type="text"
+          inputMode="decimal"
+          placeholder="0"
+          value={metaPct}
+          onChange={e => onChangeMeta(e.target.value)}
+        />
+      </div>
+
+      <button className="form-botao" onClick={onSalvar}>Salvar reserva</button>
+    </ModalFinancas>
+  );
+}
+
+function ModalListaAnos({ titulo, campos, linhas, onChange, onSalvar, onFechar }) {
+  function atualizarLinha(i, campo, valor) {
+    const novas = linhas.slice();
+    novas[i] = { ...novas[i], [campo]: valor };
+    onChange(novas);
+  }
+
+  function removerLinha(i) {
+    onChange(linhas.filter((_, idx) => idx !== i));
+  }
+
+  function adicionarLinha() {
+    const anoAtual = new Date().getFullYear();
+    const anosExistentes = linhas.map(l => parseInt(l.ano, 10)).filter(n => !isNaN(n));
+    const proximoAno = anosExistentes.length ? Math.max(...anosExistentes) + 1 : anoAtual;
+    const nova = { ano: String(proximoAno) };
+    campos.forEach(c => { nova[c.key] = ""; });
+    onChange([...linhas, nova]);
+  }
+
+  return (
+    <ModalFinancas titulo={titulo} onFechar={onFechar}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+        {linhas.map((linha, i) => (
+          <div key={i} style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", paddingBottom: "var(--space-3)", borderBottom: "1px solid var(--border2)" }}>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-3)" }}>
+              <div className="form-grupo" style={{ flex: 1 }}>
+                <label className="campo-titulo">Ano</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Ex: 2024"
+                  value={linha.ano ?? ""}
+                  onChange={e => atualizarLinha(i, "ano", e.target.value)}
+                />
+              </div>
+              <button
+                className="form-botao form-botao-perigo"
+                style={{ padding: "var(--space-3) var(--space-3)", flexShrink: 0, fontSize: 13, whiteSpace: "nowrap" }}
+                onClick={() => removerLinha(i)}
+                aria-label="Remover ano"
+                title="Remover ano"
+              >
+                Remover
+              </button>
+            </div>
+            {campos.map(c => (
+              <div className="form-grupo" key={c.key}>
+                <label className="campo-titulo">{c.label}</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="0,00"
+                  value={linha[c.key] ?? ""}
+                  onChange={e => atualizarLinha(i, c.key, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <button className="form-botao form-botao-secundario" onClick={adicionarLinha}>+ Adicionar ano</button>
+      <button className="form-botao" onClick={onSalvar}>Salvar</button>
+    </ModalFinancas>
+  );
+}
+
+function ModalMetasAlocacao({ form, onChange, onSalvar, onFechar }) {
+  return (
+    <ModalFinancas titulo="Metas de alocação" onFechar={onFechar}>
+      {ALOCACAO_CLASSES.map(c => (
+        <div className="form-grupo" key={c.sufixo}>
+          <label className="campo-titulo">{c.titulo} — meta (%)</label>
+          <input
+            className="form-input"
+            type="text"
+            inputMode="decimal"
+            placeholder="0"
+            value={form[c.sufixo] ?? ""}
+            onChange={e => onChange({ ...form, [c.sufixo]: e.target.value })}
+          />
+        </div>
+      ))}
+
+      <button className="form-botao" onClick={onSalvar}>Salvar metas</button>
+    </ModalFinancas>
+  );
+}
 
 function PaginaFinancas({ lancamentos, setLancamentos, metaDespesa, setMetaDespesa }, ref) {
   const [modalAberto, setModalAberto] = useState(false);
@@ -2330,15 +2705,14 @@ function PaginaFinancas({ lancamentos, setLancamentos, metaDespesa, setMetaDespe
 
   return (
     <>
-      <div id="sec-financas-resumo"><CardFinancasResumo totais={totais} /></div>
+      <div id="sec-financas-resumo">
+        <CardFinancasResumo totais={totais} meta={metaDespesa} gasto={totais.expense} onEditarMeta={abrirModalMeta} />
+      </div>
       <div id="sec-financas-comparativo">
-        <CardFinancasComparativo totais={totais} lancamentos={lancamentos} onEditar={abrirEdicaoLancamento} />
+        <CardFinancasComparativo lancamentos={lancamentos} onEditar={abrirEdicaoLancamento} />
       </div>
       <div id="sec-financas-meta">
         <CardFinancasMeta
-          meta={metaDespesa}
-          gasto={totais.expense}
-          onEditar={abrirModalMeta}
           lancamentos={lancamentos}
           onEditarLancamento={abrirEdicaoLancamento}
         />
@@ -2372,10 +2746,14 @@ function PaginaFinancas({ lancamentos, setLancamentos, metaDespesa, setMetaDespe
 
 PaginaFinancas = forwardRef(PaginaFinancas);
 
-// ── App Principal ─────────────────────────────────────────────────────────────
+function numParaTexto(n) {
+  if (!n) return "";
+  return String(n).replace(".", ",");
+}
 
 export default function App() {
-  const [dados, setDados]           = useState(null);
+  const [dadosPlanilha, setDadosPlanilha] = useState(null);
+  const [dadosLocais, setDadosLocais]     = useState(() => carregarDadosLocais());
   const [loading, setLoading]       = useState(true);
   const [erro, setErro]             = useState(null);
   const [scrolled, setScrolled]     = useState(false);
@@ -2386,13 +2764,44 @@ export default function App() {
   const scrollRef = useRef(null);
   const financasRef = useRef(null);
 
-  // Ao trocar de página, volta o scroll para o topo
+  const [ativoEditando, setAtivoEditando] = useState(null);
+  const [formAtivo, setFormAtivo]         = useState({ nome: "", classe: "", quantidade: "", preco_medio: "", porcentagem_meta: "" });
+
+  const [reservaModalAberto, setReservaModalAberto] = useState(false);
+  const [formReserva, setFormReserva]                 = useState("");
+  const [formReservaMeta, setFormReservaMeta]         = useState("");
+
+  const [metasModalAberto, setMetasModalAberto] = useState(false);
+  const [formMetas, setFormMetas]                 = useState({});
+
+  const [proventosModalAberto, setProventosModalAberto] = useState(false);
+  const [formProventos, setFormProventos]                 = useState([]);
+
+  const [evolucaoModalAberto, setEvolucaoModalAberto] = useState(false);
+  const [formEvolucao, setFormEvolucao]                 = useState([]);
+
   const irParaPagina = useCallback((p) => {
     setPagina(p);
     scrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
   }, []);
 
-  // Carrega TODOS os dados do programa (patrimônio/investimentos + finanças) de uma vez só na inicialização
+  useEffect(() => {
+    async function carregarSeed(url, campo, vazio) {
+      if (!vazio(dadosLocais[campo])) return;
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const seed = await r.json();
+        setDadosLocais(prev => (vazio(prev[campo]) ? { ...prev, [campo]: seed } : prev));
+      } catch {
+
+      }
+    }
+    carregarSeed(SEED_ATIVOS_URL,    "ativos",    v => Object.keys(v ?? {}).length === 0);
+    carregarSeed(SEED_PROVENTOS_URL, "proventos", v => (v ?? []).length === 0);
+    carregarSeed(SEED_EVOLUCAO_URL,  "evolucao",  v => (v ?? []).length === 0);
+  }, []);
+
   useEffect(() => {
     async function load() {
       try {
@@ -2400,7 +2809,7 @@ export default function App() {
           Promise.all(Object.entries(SHEET_GIDS).map(async ([k, gid]) => [k, await fetchSheet(gid)])),
           carregarLancamentos(),
         ]);
-        setDados(Object.fromEntries(entries));
+        setDadosPlanilha(Object.fromEntries(entries));
         setLancamentos(financas.transactions);
         setMetaDespesa(financas.metaDespesa);
       } catch (e) {
@@ -2412,11 +2821,14 @@ export default function App() {
     load();
   }, []);
 
-  // Persiste alterações de finanças (não roda no carregamento inicial)
   useEffect(() => {
     if (loading) return;
     salvarLancamentos(lancamentos, metaDespesa);
   }, [lancamentos, metaDespesa, loading]);
+
+  useEffect(() => {
+    salvarDadosLocais(dadosLocais);
+  }, [dadosLocais]);
 
   const handleScroll = useCallback(() => {
     const scrollTop = scrollRef.current?.scrollTop || 0;
@@ -2426,6 +2838,111 @@ export default function App() {
   const scrollToTop = () => {
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  function abrirEdicaoAtivo(ativo) {
+    const extra = dadosLocais.ativos[ativo.ticker] ?? {};
+    setFormAtivo({
+      nome: extra.nome ?? "",
+      classe: extra.classe ?? "",
+      quantidade: numParaTexto(extra.quantidade),
+      preco_medio: numParaTexto(extra.preco_medio),
+      porcentagem_meta: numParaTexto(extra.porcentagem_meta),
+    });
+    setAtivoEditando(ativo.ticker);
+  }
+
+  function salvarAtivo() {
+    if (!ativoEditando) return;
+    setDadosLocais(prev => ({
+      ...prev,
+      ativos: {
+        ...prev.ativos,
+        [ativoEditando]: {
+          nome: formAtivo.nome.trim(),
+          classe: formAtivo.classe,
+          quantidade: toFloat(formAtivo.quantidade),
+          preco_medio: toFloat(formAtivo.preco_medio),
+          porcentagem_meta: toFloat(formAtivo.porcentagem_meta),
+        },
+      },
+    }));
+    setAtivoEditando(null);
+  }
+
+  function limparAtivo() {
+    if (!ativoEditando) return;
+    setDadosLocais(prev => {
+      const ativos = { ...prev.ativos };
+      delete ativos[ativoEditando];
+      return { ...prev, ativos };
+    });
+    setAtivoEditando(null);
+  }
+
+  function abrirEdicaoReserva() {
+    setFormReserva(numParaTexto(dadosLocais.reserva_atual));
+    setFormReservaMeta(numParaTexto(dadosLocais.metas.reservas));
+    setReservaModalAberto(true);
+  }
+
+  function salvarReserva() {
+    setDadosLocais(prev => ({
+      ...prev,
+      reserva_atual: toFloat(formReserva),
+      metas: { ...prev.metas, reservas: toFloat(formReservaMeta) },
+    }));
+    setReservaModalAberto(false);
+  }
+
+  function abrirEdicaoMetas() {
+    const form = {};
+    ALOCACAO_CLASSES.forEach(c => { form[c.sufixo] = numParaTexto(dadosLocais.metas[c.sufixo]); });
+    setFormMetas(form);
+    setMetasModalAberto(true);
+  }
+
+  function salvarMetas() {
+    const metas = {};
+    ALOCACAO_CLASSES.forEach(c => { metas[c.sufixo] = toFloat(formMetas[c.sufixo]); });
+    setDadosLocais(prev => ({ ...prev, metas }));
+    setMetasModalAberto(false);
+  }
+
+  function abrirEdicaoProventos() {
+    setFormProventos(
+      (dadosLocais.proventos ?? []).map(r => ({ ano: String(r.ano ?? ""), total_ano: numParaTexto(r.total_ano) }))
+    );
+    setProventosModalAberto(true);
+  }
+
+  function salvarProventos() {
+    const proventos = formProventos
+      .map(r => ({ ano: String(r.ano ?? "").trim(), total_ano: toFloat(r.total_ano) }))
+      .filter(r => r.ano);
+    setDadosLocais(prev => ({ ...prev, proventos }));
+    setProventosModalAberto(false);
+  }
+
+  function abrirEdicaoEvolucao() {
+    const anoAtual = String(new Date().getFullYear());
+    setFormEvolucao(
+      (dadosLocais.evolucao ?? [])
+        .filter(r => String(r.ano ?? "") !== anoAtual)
+        .map(r => ({ ano: String(r.ano ?? ""), valor: numParaTexto(r.valor) }))
+    );
+    setEvolucaoModalAberto(true);
+  }
+
+  function salvarEvolucao() {
+    const anoAtual = String(new Date().getFullYear());
+    const evolucao = formEvolucao
+      .map(r => ({ ano: String(r.ano ?? "").trim(), valor: toFloat(r.valor) }))
+      .filter(r => r.ano && r.ano !== anoAtual)
+      .sort((a, b) => parseInt(a.ano, 10) - parseInt(b.ano, 10));
+
+    setDadosLocais(prev => ({ ...prev, evolucao }));
+    setEvolucaoModalAberto(false);
+  }
 
   if (loading) return (
     <>
@@ -2447,7 +2964,12 @@ export default function App() {
     </>
   );
 
-  const { ativos, evolucao, totais, reservas, alocacao, proventos } = dados;
+  const ativos    = montarAtivos(dadosPlanilha.ativos, dadosLocais);
+  const totais    = calcularTotais(ativos, dadosLocais.reserva_atual);
+  const alocacao  = calcularAlocacao(totais, dadosLocais.reserva_atual, dadosLocais.metas);
+  const reservas  = [{ reserva_atual: dadosLocais.reserva_atual }];
+
+  const ativoAtual = ativos.find(a => a.ticker === ativoEditando) ?? null;
 
   return (
     <>
@@ -2469,8 +2991,8 @@ export default function App() {
 
           {pagina === "patrimonio" && (
             <>
-              <div id="sec-patrimonio"><CardPatrimonio totais={totais} proventos={proventos} evolucao={evolucao} /></div>
-              <div id="sec-reserva"><CardReserva reservas={reservas} alocacao={alocacao} totais={totais} /></div>
+              <div id="sec-patrimonio"><CardPatrimonio totais={totais} evolucao={dadosLocais.evolucao} onEditarEvolucao={abrirEdicaoEvolucao} /></div>
+              <div id="sec-reserva"><CardReserva reservas={reservas} alocacao={alocacao} totais={totais} onEditar={abrirEdicaoReserva} /></div>
               <div id="sec-resumo-investimentos-patrimonio"><CardResumoInvestimentos totais={totais} /></div>
             </>
           )}
@@ -2478,9 +3000,9 @@ export default function App() {
           {pagina === "investimentos" && (
             <>
               <div id="sec-resumo-investimentos"><CardResumoInvestimentos totais={totais} /></div>
-              <div id="sec-alocacao"><CardAlocacao alocacao={alocacao} /></div>
+              <div id="sec-alocacao"><CardAlocacao alocacao={alocacao} onEditar={abrirEdicaoMetas} /></div>
               <div id="sec-aporte"><CardAporte ativos={ativos} alocacao={alocacao} /></div>
-              <div id="sec-proventos"><CardProventos proventos={proventos} /></div>
+              <div id="sec-proventos"><CardProventos proventos={dadosLocais.proventos} onEditar={abrirEdicaoProventos} /></div>
               <div id="sec-heatmap"><CardHeatmap ativos={ativos} /></div>
               {CLASSES_ATIVOS.map(c => (
                 <div id={`sec-${c.sufixo}`} key={c.classe}>
@@ -2493,6 +3015,7 @@ export default function App() {
                     selectedTicker={searchCmd?.ticker}
                     searchVersion={searchCmd?.v}
                     scrollRef={scrollRef}
+                    onEditarAtivo={abrirEdicaoAtivo}
                   />
                 </div>
               ))}
@@ -2515,11 +3038,65 @@ export default function App() {
           </footer>
         </main>
       </div>
+
+      {ativoAtual && (
+        <ModalAtivo
+          ticker={ativoAtual.ticker}
+          form={formAtivo}
+          onChange={setFormAtivo}
+          onSalvar={salvarAtivo}
+          onLimpar={limparAtivo}
+          temDados={!!dadosLocais.ativos[ativoEditando]}
+          onFechar={() => setAtivoEditando(null)}
+        />
+      )}
+
+      {reservaModalAberto && (
+        <ModalReserva
+          valor={formReserva}
+          metaPct={formReservaMeta}
+          onChangeValor={setFormReserva}
+          onChangeMeta={setFormReservaMeta}
+          onSalvar={salvarReserva}
+          onFechar={() => setReservaModalAberto(false)}
+        />
+      )}
+
+      {metasModalAberto && (
+        <ModalMetasAlocacao
+          form={formMetas}
+          onChange={setFormMetas}
+          onSalvar={salvarMetas}
+          onFechar={() => setMetasModalAberto(false)}
+        />
+      )}
+
+      {proventosModalAberto && (
+        <ModalListaAnos
+          titulo="Editar proventos"
+          campos={[{ key: "total_ano", label: "Total recebido no ano (R$)" }]}
+          linhas={formProventos}
+          onChange={setFormProventos}
+          onSalvar={salvarProventos}
+          onFechar={() => setProventosModalAberto(false)}
+        />
+      )}
+
+      {evolucaoModalAberto && (
+        <ModalListaAnos
+          titulo="Editar evolução do patrimônio"
+          campos={[
+            { key: "valor", label: "Patrimônio no ano (R$)" },
+          ]}
+          linhas={formEvolucao}
+          onChange={setFormEvolucao}
+          onSalvar={salvarEvolucao}
+          onFechar={() => setEvolucaoModalAberto(false)}
+        />
+      )}
     </>
   );
 }
-
-// ── Estilos ───────────────────────────────────────────────────────────────────
 
 function Style() {
   return (
@@ -2529,8 +3106,7 @@ function Style() {
       svg, svg *, .recharts-wrapper, .recharts-surface { outline: none !important; }
       svg:focus, svg *:focus { outline: none !important; }
 
-      /* ── Tema ── */
-      :root {
+            :root {
         --bg:             #0f1010;
         --bg2:            #141515;
         --bg3:            #1a1c1c;
@@ -2556,9 +3132,7 @@ function Style() {
 
         --radius-card:    28px;
 
-        /* Grade de espaçamento (múltiplos de 4px) — usar sempre estes tokens,
-           nunca valores arbitrários, em margin/padding/gap de qualquer componente. */
-        --space-1:  4px;
+                --space-1:  4px;
         --space-2:  8px;
         --space-3:  12px;
         --space-4:  16px;
@@ -2567,14 +3141,12 @@ function Style() {
         --space-7:  28px;
         --space-8:  32px;
 
-        /* Escala de border-radius */
-        --radius-sm:   10px;
+                --radius-sm:   10px;
         --radius-md:   14px;
         --radius-lg:   20px;
         --radius-pill: 99px;
 
-        /* Barras de progresso/composição — trilho e altura padrão */
-        --bar-track:  rgba(255, 255, 255, 0.05);
+                --bar-track:  rgba(255, 255, 255, 0.05);
         --bar-altura: 10px;
       }
 
@@ -2588,10 +3160,7 @@ function Style() {
         text-rendering: optimizeLegibility;
       }
 
-      /* Container real de scroll da aplicação — sem isso, scrollRef.current.scrollTo()
-         (busca e botões de seção) e o scrollTop usado pelo handleScroll não fazem nada,
-         pois a rolagem cairia no documento (html/body) em vez deste elemento. */
-      .root {
+            .root {
         height: 100vh;
         overflow-y: auto;
         overflow-x: hidden;
@@ -2604,8 +3173,7 @@ function Style() {
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif !important;
       }
 
-      /* ── Navbar ── */
-      .navbar {
+            .navbar {
         position: fixed;
         top: 6px;
         left: 50%;
@@ -2635,8 +3203,7 @@ function Style() {
       .navbar-left { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
       .navbar-right { display: flex; align-items: center; gap: var(--space-2); justify-self: end; min-width: 0; position: relative; }
 
-      /* ── Botão Tema ── */
-      .btn-tema {
+            .btn-tema {
         background: var(--bg3);
         border: 1px solid var(--border2);
         border-radius: 10px;
@@ -2657,8 +3224,7 @@ function Style() {
       }
       .btn-tema:active { }
 
-      /* ── Busca inline desktop ── */
-      .navbar-search-inline {
+            .navbar-search-inline {
         width: 240px;
         min-width: 240px;
         max-width: 240px;
@@ -2689,8 +3255,7 @@ function Style() {
       .navbar-search-inline-input:focus { width: 200px; }
       .navbar-search-inline-input::placeholder { color: var(--color-label); }
 
-      /* ── Busca dropdown ── */
-      .navbar-search-box {
+            .navbar-search-box {
         position: absolute;
         top: calc(100% + 10px);
         right: 0;
@@ -2767,8 +3332,7 @@ function Style() {
       }
       .navbar-titulo { font-size: 26px; font-weight: 700; color: var(--text); white-space: nowrap; }
 
-      /* ── Navbar Tabs (navegação entre páginas) ── */
-      .navbar-nav { display: flex; align-items: center; min-width: 0; }
+            .navbar-nav { display: flex; align-items: center; min-width: 0; }
       .navbar-tabs {
         display: flex;
         align-items: center;
@@ -2802,11 +3366,9 @@ function Style() {
       }
       .navbar-tab-ativo:hover { color: #f5f5f7; }
 
-      /* Menu hambúrguer (substitui as abas em telas pequenas) */
-      .navbar-hamburger-wrap { display: none; }
+            .navbar-hamburger-wrap { display: none; }
 
-      /* Overlay em tela cheia do menu hambúrguer (mobile), com efeito glass */
-      .navbar-menu-overlay {
+            .navbar-menu-overlay {
         position: fixed;
         inset: 0;
         z-index: 500;
@@ -2867,8 +3429,7 @@ function Style() {
         .navbar-hamburger-wrap { display: block; }
       }
 
-      /* ── Botão Flutuante Voltar ao Topo ── */
-      .btn-topo-flutuante {
+            .btn-topo-flutuante {
         position: fixed;
         bottom: 30px;
         right: 30px;
@@ -2924,8 +3485,7 @@ function Style() {
         background: rgba(255,255,255,0.06);
       }
 
-      /* ── Main ── */
-      .main {
+            .main {
         max-width: 1200px;
         margin: 0 auto;
         padding: 120px var(--space-5) 20px;
@@ -2934,8 +3494,7 @@ function Style() {
         gap: var(--space-8);
       }
 
-      /* ── Footer ── */
-      .app-footer {
+            .app-footer {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -2948,10 +3507,7 @@ function Style() {
       .app-footer-linha:first-child { opacity: 0.8; }
       .app-footer-linha:last-child { opacity: 0.55; font-size: 12px; }
 
-      /* ── Card ──
-         padding/gap usam !important de propósito: nenhum componente deve poder
-         sobrescrever o espaçamento do sistema de design passando style inline. */
-      .card {
+            .card {
         background: var(--bg2);
         border-radius: var(--radius-card);
         border: 1px solid var(--border);
@@ -2982,8 +3538,7 @@ function Style() {
       }
       .card-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
 
-      /* ── SubCard ── */
-      .subcard {
+            .subcard {
         background: var(--bg3);
         border-radius: var(--radius-card);
         border: 1px solid var(--border2);
@@ -3000,9 +3555,11 @@ function Style() {
         padding: var(--space-2) var(--space-4) !important;
         border-radius: var(--radius-card) !important;
       }
+      .subcard-titulo-icon {
+        padding: var(--space-2) !important;
+      }
 
-      /* ── Campo ── */
-      .campo { display: flex; flex-direction: column; gap: var(--space-1); }
+            .campo { display: flex; flex-direction: column; gap: var(--space-1); }
       .campo-titulo {
         font-size: 14px;
         font-weight: 500;
@@ -3020,16 +3577,13 @@ function Style() {
         font-variant-numeric: tabular-nums;
       }
 
-      /* ── Divisor ── */
-      .divisor { margin-top: 15px; height: 1px; background: var(--border2); border: none; }
+            .divisor { margin-top: 15px; height: 1px; background: var(--border2); border: none; }
 
-      /* ── Hero Valor (bloco título + valor grande em destaque, usado em vários cards) ── */
-      .hero-valor { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+            .hero-valor { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
       .hero-valor-titulo { font-size: 14px; letter-spacing: 0.05em; }
       .hero-valor-valor { line-height: 1; }
 
-      /* ── Barra de progresso/composição (design único para todas as barras do app) ── */
-      .barra-track {
+            .barra-track {
         position: relative;
         height: var(--bar-altura);
         border-radius: var(--radius-pill);
@@ -3054,11 +3608,7 @@ function Style() {
         transform: translateX(-50%);
       }
 
-      /* ── Tile (card pequeno de legenda/estatística, único padrão para todos os "mini cards") ──
-         Segue a mesma hierarquia de camadas do resto do app (bg2 → bg3 → bg4), já que o Tile
-         vive dentro de um SubCard (bg3) — por isso usa --bg4/--border2 em vez de overlays
-         translúcidos avulsos, igual ao padrão já usado em .navbar-search-inline. */
-      .tile {
+            .tile {
         background: var(--bg4);
         border: 1px solid rgba(255, 255, 255, 0.06);
         border-radius: var(--radius-lg);
@@ -3106,8 +3656,7 @@ function Style() {
       .tile-clicavel { cursor: pointer; }
       .tile-clicavel:active { transform: scale(0.98); }
 
-      /* ── Dropdown (menu suspenso — filtros mobile e qualquer outro dropdown do app) ── */
-      .dropdown-wrap { position: relative; }
+            .dropdown-wrap { position: relative; }
       .dropdown-trigger {
         display: flex;
         align-items: center;
@@ -3158,18 +3707,12 @@ function Style() {
         font-weight: 600;
       }
 
-      /* Variante flutuante (renderizada via portal em document.body), usada
-         para dropdowns dentro de cards com overflow:hidden — assim o menu
-         nunca fica cortado pelo card e sempre fica por cima de tudo. */
-      .dropdown-menu-flutuante {
+            .dropdown-menu-flutuante {
         position: fixed !important;
         z-index: 9999;
       }
 
-      /* ── Cabeçalho de Ativo (ticker + nome — padrão único, usado em
-         qualquer lugar que mostre um ativo: card individual, resumo de
-         aporte, etc.) ── */
-      .ativo-nome-ticker {
+            .ativo-nome-ticker {
         font-size: 20px;
         font-weight: 500;
         color: var(--color-value);
@@ -3258,9 +3801,7 @@ function Style() {
       .list-row-plain {
         --row-pad-x: 0px;
       }
-      /* Destaque do campo pelo qual a lista está sendo filtrada
-         (ex.: filtrar por "Total atual" marca essa linha em todos os ativos) */
-      .list-row-filtrado {
+            .list-row-filtrado {
         margin: 0 -10px;
         padding-left: 10px;
         padding-right: 10px;
@@ -3285,17 +3826,14 @@ function Style() {
         flex-shrink: 0;
       }
       @media (max-width: 640px) {
-        /* --row-pad-x controla o padding E o traço divisório juntos —
-           nunca mais dessincronizados entre si. */
-        .list-row { gap: var(--space-2); --row-pad-x: var(--space-4); }
+                .list-row { gap: var(--space-2); --row-pad-x: var(--space-4); }
         .list-row-plain { --row-pad-x: 0px; }
         .list-row-label { font-size: 13px; }
         .list-row-value { font-size: 13px; }
         .list-row-sub { font-size: 10px; }
       }
 
-      /* ── Botões ── */
-      .btn-ver,
+            .btn-ver,
       .btn-filtro-simples {
         background: transparent;
         color: #ffffff;
@@ -3411,11 +3949,9 @@ function Style() {
         padding-top: var(--space-1);
       }
 
-      /* ── Ativos Lista ── */
-      .ativos-lista { display: flex; flex-direction: column; gap: var(--space-4); }
+            .ativos-lista { display: flex; flex-direction: column; gap: var(--space-4); }
 
-      /* ── Heatmap ── */
-      .heatmap-grid {
+            .heatmap-grid {
         display: grid;
         grid-template-columns: repeat(6, 1fr);
         gap: var(--space-3);
@@ -3446,8 +3982,7 @@ function Style() {
         .hm-brl {font-size: 16px !important;}
       }
 
-      /* ── Barras do Gráfico de Proventos ── */
-      .barra-proventos { border-radius: 10px 10px 4px 4px; }
+            .barra-proventos { border-radius: 10px 10px 4px 4px; }
       .barra-proventos-glow { border-radius: 10px 10px 0 0; }
 
       @media (min-width: 1024px) {
@@ -3460,8 +3995,7 @@ function Style() {
         .barra-proventos-glow { border-radius: 18px 18px 0 0; }
       }
 
-      /* ── Tooltip do Gráfico ── */
-      .chart-tooltip {
+            .chart-tooltip {
         background: var(--bg3);
         border: 1px solid var(--border2);
         border-radius: 12px;
@@ -3472,8 +4006,7 @@ function Style() {
       .tooltip-val   { font-size: 16px; font-weight: 700; }
       .tooltip-sub   { font-size: 13px; margin-top: 2px; }
 
-      /* ── Finanças — Botão Flutuante Adicionar ── */
-      .fab-adicionar {
+            .fab-adicionar {
         position: fixed;
         bottom: 30px;
         left: 30px;
@@ -3500,29 +4033,31 @@ function Style() {
         .fab-adicionar { bottom: 18px; left: 14px; width: 50px; height: 50px; }
       }
 
-      /* ── Finanças — Modal (adicionar/editar lançamento, definir meta) ── */
-      .modal-overlay {
+            .modal-overlay {
         position: fixed;
         inset: 0;
         background: rgba(0,0,0,0.55);
         backdrop-filter: blur(4px);
         -webkit-backdrop-filter: blur(4px);
         display: flex;
-        align-items: flex-end;
+        align-items: center;
         justify-content: center;
         z-index: 1000;
         animation: modalFadeIn 0.2s ease;
-      }
-      @media (min-width: 640px) {
-        .modal-overlay { align-items: center; }
+        padding: var(--space-4);
       }
       @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
       .modal-sheet {
         width: 100%;
         max-width: 420px;
+        max-height: 80vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
         background: var(--bg2);
         border: 1px solid var(--border2);
-        border-radius: var(--radius-card) var(--radius-card) 0 0;
+        border-radius: var(--radius-card);
         padding: var(--space-6);
         display: flex;
         flex-direction: column;
@@ -3530,8 +4065,9 @@ function Style() {
         box-shadow: 0 -10px 40px rgba(0,0,0,0.4);
         animation: modalSlideUp 0.28s cubic-bezier(0.22,1,0.36,1);
       }
-      @media (min-width: 640px) {
-        .modal-sheet { border-radius: var(--radius-card); }
+      .modal-sheet::-webkit-scrollbar { display: none; width: 0; height: 0; }
+      @media (max-width: 480px) {
+        .modal-sheet { padding: var(--space-4); }
       }
       @keyframes modalSlideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
       .modal-header { display: flex; align-items: center; justify-content: space-between; }
@@ -3565,7 +4101,7 @@ function Style() {
       .tipo-opcao-ativa.income { background: rgba(10,85,80,0.2); border-color: #0a5550; color: #f5f5f7; }
       .tipo-opcao-ativa.expense { background: rgba(138,53,53,0.2); border-color: #8a3535; color: #f5f5f7; }
 
-      .form-grupo { display: flex; flex-direction: column; gap: var(--space-2); }
+      .form-grupo { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
       .form-input {
         background: var(--bg3);
         border: 1px solid var(--border2);
@@ -3575,10 +4111,54 @@ function Style() {
         color: var(--color-value);
         font-family: inherit;
         outline: none;
+        width: 100%;
+        min-width: 0;
         transition: border-color 0.15s, box-shadow 0.15s;
       }
       .form-input:focus { border-color: #0a5550; box-shadow: 0 0 0 2px rgba(10,85,80,0.15); }
       .form-input::placeholder { color: var(--color-label); }
+
+      .form-select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        cursor: pointer;
+        padding-right: 40px;
+        display: flex;
+        align-items: center;
+        text-align: left;
+        font-size: 15px;
+        font-family: inherit;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right var(--space-4) center;
+        background-size: 16px;
+        transition: border-color 0.15s, box-shadow 0.15s, background-image 0.15s;
+      }
+      .form-select-aberto,
+      .form-select:focus {
+        border-color: #0a5550;
+        box-shadow: 0 0 0 2px rgba(10,85,80,0.15);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%230d6e68' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      }
+      .form-select-aberto { background-position: right var(--space-4) center; transform: none; }
+      .form-select option {
+        background: var(--bg3);
+        color: var(--color-value);
+      }
+
+            .dropdown-menu-select {
+        padding: var(--space-2);
+        max-height: 260px;
+        overflow-y: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      .dropdown-menu-select::-webkit-scrollbar { display: none; width: 0; height: 0; }
+      .dropdown-menu-select .dropdown-item {
+        font-size: 15px;
+        padding: var(--space-3) var(--space-3);
+      }
 
       .form-botao {
         background: var(--accent);
@@ -3599,8 +4179,7 @@ function Style() {
       .form-botao-secundario { background: transparent; border: 1px solid var(--border2); color: var(--color-label); }
       .form-botao-secundario:hover { background: var(--bg3); color: var(--color-value); }
 
-      /* ── Loading ── */
-      .loading-page {
+            .loading-page {
         height: 100vh;
         display: flex;
         align-items: center;
@@ -3636,8 +4215,7 @@ function Style() {
       }
       .loading-texto { font-size: 16px; color: var(--color-subtitle); }
 
-      /* ── Spinner ── */
-      .spinner-wrap { display: flex; justify-content: center; }
+            .spinner-wrap { display: flex; justify-content: center; }
       .spinner {
         width: 34px; height: 34px;
         border: 3px solid var(--spinner-track);
@@ -3651,15 +4229,11 @@ function Style() {
         50%       { box-shadow: 0 0 18px 6px rgba(10,85,80,0.55); }
       }
 
-      /* ── Scrollbar ── */
-      .root::-webkit-scrollbar { width: 6px; }
+            .root::-webkit-scrollbar { width: 6px; }
       .root::-webkit-scrollbar-track { background: transparent; }
       .root::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 
-      /* ── Responsivo ── */
-
-      /* lg — Landscape tablets e laptops pequenos (≤ 1024px) */
-      @media (max-width: 1024px) {
+            @media (max-width: 1024px) {
         :root { --radius-card: 24px; }
         .main { padding: 106px 18px 52px; gap: 22px; }
         .navbar { width: calc(100% - 36px); max-width: none; }
@@ -3670,13 +4244,11 @@ function Style() {
         .campo-titulo { font-size: 13px; }
       }
 
-      /* sm — Smartphones grandes e tablets pequenos (≤ 640px) */
-      @media (max-width: 640px) {
+            @media (max-width: 640px) {
         :root { --radius-card: 22px; }
         .main { padding: 96px var(--space-3) 40px; gap: var(--space-4); }
 
-        /* Navbar */
-        .navbar {
+                .navbar {
           transform: translateX(-50%);
           width: calc(100% - 24px);
           padding: 18px 14px;
@@ -3685,44 +4257,36 @@ function Style() {
         }
         .navbar-titulo { font-size: 17px; }
 
-        /* Botão topo */
-        .btn-topo-flutuante { bottom: 18px; right: 14px; width: 50px; height: 50px; }
+                .btn-topo-flutuante { bottom: 18px; right: 14px; width: 50px; height: 50px; }
         .btn-topo { font-size: 12px; padding: 5px 10px; }
 
-        /* Cards */
-        .card        { padding: 18px !important; gap: var(--space-3); }
+                .card        { padding: 18px !important; gap: var(--space-3); }
         .card-titulo { font-size: 16px; }
         .card-header { gap: var(--space-2); }
 
-        /* SubCard */
-        .subcard { padding: var(--space-4) !important; gap: 10px; }
+                .subcard { padding: var(--space-4) !important; gap: 10px; }
         .subcard-titulo { padding: var(--space-2) var(--space-3) !important; }
 
-        /* Campos */
-        .campo       { gap: var(--space-1); }
+                .campo       { gap: var(--space-1); }
         .campo-valor { font-size: 22px; }
         .campo-titulo { font-size: 12px; }
 
-        /* Botões */
-        .btn-ver    { font-size: 14px; padding: var(--space-1) 6px; margin-right: -6px; min-width: auto; width: auto; }
+                .btn-ver    { font-size: 14px; padding: var(--space-1) 6px; margin-right: -6px; min-width: auto; width: auto; }
         .btn-filtro-simples { font-size: 13px; }
         .filtros-row { gap: var(--space-3); }
 
-        /* Ativos individuais */
-        .logo-ativo-principal { width: 52px !important; height: 52px !important; }
+                .logo-ativo-principal { width: 52px !important; height: 52px !important; }
         .chart-tooltip { padding: var(--space-2) 10px; font-size: 11px; }
         .tooltip-val   { font-size: 13px; }
         .tooltip-sub   { font-size: 11px; }
 
-        /* Heatmap */
-        .heatmap-cell { min-height: 66px; padding: var(--space-2) var(--space-1); border-radius: 20px; }
+                .heatmap-cell { min-height: 66px; padding: var(--space-2) var(--space-1); border-radius: 20px; }
         .hm-ticker { font-size: 12px; }
         .hm-pct    { font-size: 11px; }
         .hm-brl    { font-size: 14px; }
       }
 
-      /* Mobile pequeno (≤ 400px) */
-      @media (max-width: 400px) {
+            @media (max-width: 400px) {
         :root { --radius-card: 20px; }
         .main { padding: 105px 10px 34px; gap: var(--space-4); }
         .card        { padding: var(--space-4) !important; gap: var(--space-4); }
@@ -3741,8 +4305,7 @@ function Style() {
         .tooltip-sub   { font-size: 10px; }
       }
 
-      /* Mobile muito pequeno (≤ 340px) */
-      @media (max-width: 340px) {
+            @media (max-width: 340px) {
         .main    { padding: 78px var(--space-2) var(--space-7); gap: 10px; }
         .card    { padding: 14px !important; gap: var(--space-2); }
         .subcard { padding: var(--space-3) !important; gap: 6px; }
