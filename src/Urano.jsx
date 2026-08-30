@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { createPortal } from "react-dom";
 import { XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, get, set } from "firebase/database";
 import ativosPadrao from "./ativos.json";
 import proventosPadrao from "./proventos.json";
 import evolucaoPadrao from "./evolucao.json";
@@ -13,6 +15,17 @@ const SHEET_GIDS = {
 };
 
 const LOCAL_STORAGE_KEY = "urano_dados_locais";
+
+// Config do projeto Firebase (Firebase Console > Configurações do projeto > Seus apps > SDK)
+const firebaseConfig = {
+  apiKey: "AIzaSyCIUmPWzO_LvPS5SEc1WYnQ4DQ-B31u6r4",
+  authDomain: "urano-d74d5.firebaseapp.com",
+  databaseURL: "https://urano-d74d5-default-rtdb.firebaseio.com",
+  projectId: "urano-d74d5",
+  storageBucket: "urano-d74d5.firebasestorage.app",
+  messagingSenderId: "185099495680",
+  appId: "1:185099495680:web:1571e523de96ac3b34abe5",
+};
 
 const SEED_ATIVOS_URL    = "/dados/ativos.json";
 const SEED_PROVENTOS_URL = "/dados/proventos.json";
@@ -154,26 +167,28 @@ async function fetchSheet(gid) {
   return parseCSV(t);
 }
 
+function normalizarDadosLocais(salvo) {
+  const ativosSalvos = salvo.ativos ?? {};
+  const ativos = Object.keys(ativosSalvos).length > 0 ? ativosSalvos : { ...ativosPadrao };
+  const proventosSalvos = salvo.proventos ?? [];
+  const proventos = proventosSalvos.length > 0 ? proventosSalvos : [...proventosPadrao];
+  const evolucaoSalva = salvo.evolucao ?? [];
+  const evolucao = evolucaoSalva.length > 0 ? evolucaoSalva : [...evolucaoPadrao];
+  return {
+    ...dadosLocaisPadrao(),
+    ...salvo,
+    ativos,
+    proventos,
+    evolucao,
+    metas: { ...dadosLocaisPadrao().metas, ...(salvo.metas ?? {}) },
+  };
+}
+
 function carregarDadosLocais() {
   try {
     const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return dadosLocaisPadrao();
-    const salvo = JSON.parse(raw);
-
-    const ativosSalvos = salvo.ativos ?? {};
-    const ativos = Object.keys(ativosSalvos).length > 0 ? ativosSalvos : { ...ativosPadrao };
-    const proventosSalvos = salvo.proventos ?? [];
-    const proventos = proventosSalvos.length > 0 ? proventosSalvos : [...proventosPadrao];
-    const evolucaoSalva = salvo.evolucao ?? [];
-    const evolucao = evolucaoSalva.length > 0 ? evolucaoSalva : [...evolucaoPadrao];
-    return {
-      ...dadosLocaisPadrao(),
-      ...salvo,
-      ativos,
-      proventos,
-      evolucao,
-      metas: { ...dadosLocaisPadrao().metas, ...(salvo.metas ?? {}) },
-    };
+    return normalizarDadosLocais(JSON.parse(raw));
   } catch {
     return dadosLocaisPadrao();
   }
@@ -184,6 +199,34 @@ function salvarDadosLocais(dadosLocais) {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(dadosLocais));
   } catch (err) {
     console.error("Erro ao salvar dados locais:", err);
+  }
+}
+
+// A partir daqui: sincronização na nuvem (mesmo padrão usado em carregarLancamentos/salvarLancamentos).
+// localStorage continua funcionando como cache instantâneo (abre rápido, funciona offline);
+// a nuvem passa a ser a fonte "oficial" compartilhada entre os dispositivos.
+// A partir daqui: sincronização na nuvem via Firebase Realtime Database.
+// localStorage continua funcionando como cache instantâneo (abre rápido, funciona offline);
+// o Firebase passa a ser a fonte "oficial" compartilhada entre os dispositivos.
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getDatabase(firebaseApp);
+
+async function carregarDadosLocaisNuvem() {
+  try {
+    const snapshot = await get(ref(db, "dadosLocais"));
+    const data = snapshot.val();
+    return (data && typeof data === "object") ? data : {};
+  } catch (err) {
+    console.error("Erro ao carregar dados da nuvem:", err);
+    return {};
+  }
+}
+
+async function salvarDadosLocaisNuvem(dadosLocais) {
+  try {
+    await set(ref(db, "dadosLocais"), dadosLocais);
+  } catch (err) {
+    console.error("Erro ao salvar dados na nuvem:", err);
   }
 }
 
@@ -2805,13 +2848,20 @@ export default function App() {
   useEffect(() => {
     async function load() {
       try {
-        const [entries, financas] = await Promise.all([
+        const [entries, financas, dadosNuvem] = await Promise.all([
           Promise.all(Object.entries(SHEET_GIDS).map(async ([k, gid]) => [k, await fetchSheet(gid)])),
           carregarLancamentos(),
+          carregarDadosLocaisNuvem(),
         ]);
         setDadosPlanilha(Object.fromEntries(entries));
         setLancamentos(financas.transactions);
         setMetaDespesa(financas.metaDespesa);
+
+        // Só substitui pelo que veio da nuvem se já existir algo salvo lá
+        // (evita apagar os dados locais na primeiríssima vez, antes do primeiro salvamento).
+        if (dadosNuvem && Object.keys(dadosNuvem).length > 0) {
+          setDadosLocais(normalizarDadosLocais(dadosNuvem));
+        }
       } catch (e) {
         setErro(String(e));
       } finally {
@@ -2828,7 +2878,9 @@ export default function App() {
 
   useEffect(() => {
     salvarDadosLocais(dadosLocais);
-  }, [dadosLocais]);
+    if (loading) return; // evita mandar os defaults pra nuvem antes de carregar o que já existe lá
+    salvarDadosLocaisNuvem(dadosLocais);
+  }, [dadosLocais, loading]);
 
   const handleScroll = useCallback(() => {
     const scrollTop = scrollRef.current?.scrollTop || 0;
