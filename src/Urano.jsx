@@ -2164,8 +2164,6 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
   );
 }
 
-const FINANCAS_API_URL = "https://script.google.com/macros/s/AKfycbwJsa0yUSpzKtQ-LRWrI9LnppE5U-4ZpFlphaf_Kd-ze8gbqdoiJnkhuSibS6OgIG8dPA/exec";
-
 const FINANCAS_FILTROS = [
   { texto: "Todas",    key: "all"     },
   { texto: "Receitas", key: "income"  },
@@ -2174,26 +2172,22 @@ const FINANCAS_FILTROS = [
 
 async function carregarLancamentos() {
   try {
-    const res = await fetch(FINANCAS_API_URL);
-    const data = await res.json();
-
-    if (Array.isArray(data)) return { transactions: data, metaDespesa: 0 };
+    const snapshot = await get(ref(db, "financas"));
+    const data = snapshot.val();
+    if (!data || typeof data !== "object") return { transactions: [], metaDespesa: 0 };
     return {
       transactions: Array.isArray(data.transactions) ? data.transactions : [],
       metaDespesa: Number(data.metaDespesa) || 0,
     };
-  } catch {
+  } catch (err) {
+    console.error("Erro ao carregar lançamentos:", err);
     return { transactions: [], metaDespesa: 0 };
   }
 }
 
 async function salvarLancamentos(transactions, metaDespesa) {
   try {
-    await fetch(FINANCAS_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ transactions, metaDespesa }),
-    });
+    await set(ref(db, "financas"), { transactions, metaDespesa });
   } catch (err) {
     console.error("Erro ao salvar lançamentos:", err);
   }
