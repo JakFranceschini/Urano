@@ -230,7 +230,23 @@ async function salvarDadosLocaisNuvem(dadosLocais) {
   }
 }
 
+// Imagens dos ativos ficam em public/img_ativos/{TICKER}.png, adicionadas manualmente
+// na pasta do projeto (sem envio pra nuvem).
+
 const CLASSES_EM_DOLAR = ["stock", "reit", "etf"];
+
+// Busca os dados extras de um ativo (dadosLocais.ativos) por ticker, ignorando
+// maiúsculas/minúsculas — compatível com chaves antigas salvas em maiúsculo.
+function buscarExtraAtivo(ativosExtra, ticker) {
+  const alvo = String(ticker ?? "").trim();
+  if (!alvo) return {};
+  if (ativosExtra?.[alvo]) return ativosExtra[alvo];
+  const chaveLower = alvo.toLowerCase();
+  const chaveEncontrada = Object.keys(ativosExtra ?? {}).find(
+    k => k.toLowerCase() === chaveLower
+  );
+  return chaveEncontrada ? ativosExtra[chaveEncontrada] : {};
+}
 
 function montarAtivos(ativosPlanilha, dadosLocais) {
 
@@ -244,7 +260,7 @@ function montarAtivos(ativosPlanilha, dadosLocais) {
     .map(row => {
     const ticker = String(row.ticker ?? "").trim();
     const cotacao = toFloat(row.cotacao);
-    const extra = dadosLocais.ativos[ticker] ?? {};
+    const extra = buscarExtraAtivo(dadosLocais.ativos, ticker);
     const quantidade = toFloat(extra.quantidade);
     const preco_medio = toFloat(extra.preco_medio);
     const classe = String(extra.classe || "").toLowerCase().trim();
@@ -781,9 +797,19 @@ function Loading() {
 }
 
 function LogoAtivo({ ticker, size = 72, offsetX = 0, className = "" }) {
-  const [err, setErr] = useState(false);
-  const src = `/img_ativos/${String(ticker).toUpperCase()}.png`;
-  if (err) {
+  const [src, setSrc] = useState(() => `/img_ativos/${String(ticker).toUpperCase()}.png`);
+  const [estagio, setEstagio] = useState("local"); // "local" -> "letra"
+
+  useEffect(() => {
+    setSrc(`/img_ativos/${String(ticker).toUpperCase()}.png`);
+    setEstagio("local");
+  }, [ticker]);
+
+  function handleErro() {
+    setEstagio("letra");
+  }
+
+  if (estagio === "letra") {
     return (
       <div className={className} style={{
         width: size, height: size, background: "var(--accent)",
@@ -803,7 +829,7 @@ function LogoAtivo({ ticker, size = 72, offsetX = 0, className = "" }) {
       src={src}
       alt={ticker}
       width={size} height={size}
-      onError={() => setErr(true)}
+      onError={handleErro}
       style={{ borderRadius: 12, objectFit: "contain", flexShrink: 0, marginLeft: offsetX }}
     />
   );
@@ -2297,88 +2323,110 @@ function CardFinancasResumo({ totais, meta, gasto, onEditarMeta }) {
   );
 }
 
-function CardFinancasComparativo({ lancamentos, onEditar }) {
+function CardFinancasComparativo({ lancamentos, onEditar, onAdicionar }) {
   const receitas = lancamentos.filter(t => t.type === "income");
 
-  if (receitas.length === 0) return null;
-
   return (
     <Card>
-      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
+      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+        <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="seta-cima" />Receitas</h2>
-        </div>
-      </SubCard>
+        </SubCard>
+        <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
+          <button className="btn-editar-icone" onClick={() => onAdicionar("income")} aria-label="Adicionar receita" title="Adicionar receita" style={{ margin: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </SubCard>
+      </div>
 
-      <SubCard>
-        <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
-          {receitas.map(tx => (
-            <div key={tx.id} className="list-row list-row-plain">
-              <div className="list-row-left">
-                <span className="list-row-label">{sentenceCase(tx.name)}</span>
+      {receitas.length === 0 ? (
+        <SubCard>
+          <div className="campo-titulo">Nenhuma receita cadastrada ainda.</div>
+        </SubCard>
+      ) : (
+        <SubCard>
+          <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
+            {receitas.map(tx => (
+              <div key={tx.id} className="list-row list-row-plain">
+                <div className="list-row-left">
+                  <span className="list-row-label">{sentenceCase(tx.name)}</span>
+                </div>
+                <div className="list-row-right">
+                  <span className="list-row-value" style={{ color: COR_ALTA }}>
+                    +{fmtBRL(tx.value)}
+                  </span>
+                  <button className="btn-editar-icone" onClick={() => onEditar(tx)} aria-label="Editar" title="Editar">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div className="list-row-right">
-                <span className="list-row-value" style={{ color: COR_ALTA }}>
-                  +{fmtBRL(tx.value)}
-                </span>
-                <button className="btn-editar-icone" onClick={() => onEditar(tx)} aria-label="Editar" title="Editar">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </SubCard>
+            ))}
+          </div>
+        </SubCard>
+      )}
     </Card>
   );
 }
 
-function CardFinancasMeta({ lancamentos, onEditarLancamento }) {
+function CardFinancasMeta({ lancamentos, onEditarLancamento, onAdicionar }) {
   const despesas = lancamentos.filter(t => t.type === "expense");
 
-  if (despesas.length === 0) return null;
-
   return (
     <Card>
-      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
+      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+        <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="seta-baixo" />Despesas</h2>
-        </div>
-      </SubCard>
+        </SubCard>
+        <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
+          <button className="btn-editar-icone" onClick={() => onAdicionar("expense")} aria-label="Adicionar despesa" title="Adicionar despesa" style={{ margin: 0 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </SubCard>
+      </div>
 
-      <SubCard>
-        <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
-          {despesas.map(tx => (
-            <div key={tx.id} className="list-row list-row-plain">
-              <div className="list-row-left">
-                <span className="list-row-label">{sentenceCase(tx.name)}</span>
+      {despesas.length === 0 ? (
+        <SubCard>
+          <div className="campo-titulo">Nenhuma despesa cadastrada ainda.</div>
+        </SubCard>
+      ) : (
+        <SubCard>
+          <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
+            {despesas.map(tx => (
+              <div key={tx.id} className="list-row list-row-plain">
+                <div className="list-row-left">
+                  <span className="list-row-label">{sentenceCase(tx.name)}</span>
+                </div>
+                <div className="list-row-right">
+                  <span className="list-row-value" style={{ color: COR_BAIXA }}>
+                    -{fmtBRL(tx.value)}
+                  </span>
+                  <button className="btn-editar-icone" onClick={() => onEditarLancamento(tx)} aria-label="Editar" title="Editar">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 20h9" />
+                      <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-              <div className="list-row-right">
-                <span className="list-row-value" style={{ color: COR_BAIXA }}>
-                  -{fmtBRL(tx.value)}
-                </span>
-                <button className="btn-editar-icone" onClick={() => onEditarLancamento(tx)} aria-label="Editar" title="Editar">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 20h9" />
-                    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </SubCard>
+            ))}
+          </div>
+        </SubCard>
+      )}
     </Card>
   );
 }
 
-function ModalFinancas({ titulo, onFechar, children }) {
+function ModalFinancas({ titulo, onFechar, children, className }) {
   return createPortal(
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onFechar()}>
-      <div className="modal-sheet">
+      <div className={`modal-sheet${className ? ` ${className}` : ""}`}>
         <div className="modal-header">
           <h3 className="modal-titulo">{titulo}</h3>
           <button className="modal-fechar" onClick={onFechar} aria-label="Fechar">✕</button>
@@ -2391,8 +2439,10 @@ function ModalFinancas({ titulo, onFechar, children }) {
 }
 
 function ModalLancamento({ form, editando, onChange, onSalvar, onExcluir, onFechar, formatarValor }) {
+  const tipoClasse = form.type === "expense" ? "tipo-despesa" : "tipo-receita";
+
   return (
-    <ModalFinancas titulo={editando ? "Editar lançamento" : "Novo lançamento"} onFechar={onFechar}>
+    <ModalFinancas titulo={editando ? "Editar lançamento" : "Novo lançamento"} onFechar={onFechar} className={tipoClasse}>
       <div className="tipo-toggle">
         <button
           className={`tipo-opcao${form.type === "income" ? " tipo-opcao-ativa income" : ""}`}
@@ -2472,6 +2522,22 @@ function ModalMeta({ valor, onChange, onSalvar, onLimpar, temMeta, onFechar }) {
 function ModalAtivo({ ticker, form, onChange, onSalvar, onLimpar, temDados, onFechar }) {
   return (
     <ModalFinancas titulo={`Editar ${String(ticker).toUpperCase()}`} onFechar={onFechar}>
+      <div className="form-grupo">
+        <label className="campo-titulo">Ticker</label>
+        <input
+          className="form-input"
+          placeholder="Ex: AAPL"
+          value={form.ticker}
+          onChange={e => onChange({ ...form, ticker: e.target.value.toUpperCase() })}
+        />
+        {form.ticker.trim().toUpperCase() !== String(ticker).toUpperCase() && (
+          <span style={{ fontSize: 12, color: "var(--color-label)", marginTop: 4, display: "block" }}>
+            Ao salvar, os dados deste ativo serão movidos de {String(ticker).toUpperCase()} para {form.ticker.trim().toUpperCase() || "—"}.
+            Lembre-se de usar exatamente o mesmo ticker que está na planilha.
+          </span>
+        )}
+      </div>
+
       <div className="form-grupo">
         <label className="campo-titulo">Nome</label>
         <input
@@ -2675,9 +2741,9 @@ function PaginaFinancas({ lancamentos, setLancamentos, metaDespesa, setMetaDespe
     return parseFloat(formatado.replace(/\./g, "").replace(",", ".")) || 0;
   }
 
-  function abrirNovoLancamento() {
+  function abrirNovoLancamento(tipo = "income") {
     setEditandoId(null);
-    setForm({ name: "", value: "", type: "income" });
+    setForm({ name: "", value: "", type: tipo });
     setModalAberto(true);
   }
 
@@ -2734,12 +2800,13 @@ function PaginaFinancas({ lancamentos, setLancamentos, metaDespesa, setMetaDespe
         <CardFinancasResumo totais={totais} meta={metaDespesa} gasto={totais.expense} onEditarMeta={abrirModalMeta} />
       </div>
       <div id="sec-financas-comparativo">
-        <CardFinancasComparativo lancamentos={lancamentos} onEditar={abrirEdicaoLancamento} />
+        <CardFinancasComparativo lancamentos={lancamentos} onEditar={abrirEdicaoLancamento} onAdicionar={abrirNovoLancamento} />
       </div>
       <div id="sec-financas-meta">
         <CardFinancasMeta
           lancamentos={lancamentos}
           onEditarLancamento={abrirEdicaoLancamento}
+          onAdicionar={abrirNovoLancamento}
         />
       </div>
 
@@ -2790,7 +2857,7 @@ export default function App() {
   const financasRef = useRef(null);
 
   const [ativoEditando, setAtivoEditando] = useState(null);
-  const [formAtivo, setFormAtivo]         = useState({ nome: "", classe: "", quantidade: "", preco_medio: "", porcentagem_meta: "" });
+  const [formAtivo, setFormAtivo]         = useState({ ticker: "", nome: "", classe: "", quantidade: "", preco_medio: "", porcentagem_meta: "" });
 
   const [reservaModalAberto, setReservaModalAberto] = useState(false);
   const [formReserva, setFormReserva]                 = useState("");
@@ -2873,8 +2940,9 @@ export default function App() {
   };
 
   function abrirEdicaoAtivo(ativo) {
-    const extra = dadosLocais.ativos[ativo.ticker] ?? {};
+    const extra = buscarExtraAtivo(dadosLocais.ativos, ativo.ticker);
     setFormAtivo({
+      ticker: ativo.ticker,
       nome: extra.nome ?? "",
       classe: extra.classe ?? "",
       quantidade: numParaTexto(extra.quantidade),
@@ -2886,19 +2954,25 @@ export default function App() {
 
   function salvarAtivo() {
     if (!ativoEditando) return;
-    setDadosLocais(prev => ({
-      ...prev,
-      ativos: {
-        ...prev.ativos,
-        [ativoEditando]: {
-          nome: formAtivo.nome.trim(),
-          classe: formAtivo.classe,
-          quantidade: toFloat(formAtivo.quantidade),
-          preco_medio: toFloat(formAtivo.preco_medio),
-          porcentagem_meta: toFloat(formAtivo.porcentagem_meta),
-        },
-      },
-    }));
+    const novoTicker = formAtivo.ticker.trim().toLowerCase() || String(ativoEditando).toLowerCase();
+    setDadosLocais(prev => {
+      const ativos = { ...prev.ativos };
+      // Remove a chave antiga (pode estar em maiúsculo, de antes desta correção)
+      const chaveAntiga = Object.keys(ativos).find(
+        k => k.toLowerCase() === String(ativoEditando).toLowerCase()
+      );
+      if (chaveAntiga && chaveAntiga !== novoTicker) {
+        delete ativos[chaveAntiga];
+      }
+      ativos[novoTicker] = {
+        nome: formAtivo.nome.trim(),
+        classe: formAtivo.classe,
+        quantidade: toFloat(formAtivo.quantidade),
+        preco_medio: toFloat(formAtivo.preco_medio),
+        porcentagem_meta: toFloat(formAtivo.porcentagem_meta),
+      };
+      return { ...prev, ativos };
+    });
     setAtivoEditando(null);
   }
 
@@ -2906,7 +2980,10 @@ export default function App() {
     if (!ativoEditando) return;
     setDadosLocais(prev => {
       const ativos = { ...prev.ativos };
-      delete ativos[ativoEditando];
+      const chave = Object.keys(ativos).find(
+        k => k.toLowerCase() === String(ativoEditando).toLowerCase()
+      );
+      if (chave) delete ativos[chave];
       return { ...prev, ativos };
     });
     setAtivoEditando(null);
@@ -3077,7 +3154,7 @@ export default function App() {
           onChange={setFormAtivo}
           onSalvar={salvarAtivo}
           onLimpar={limparAtivo}
-          temDados={!!dadosLocais.ativos[ativoEditando]}
+          temDados={Object.keys(dadosLocais.ativos ?? {}).some(k => k.toLowerCase() === String(ativoEditando).toLowerCase())}
           onFechar={() => setAtivoEditando(null)}
         />
       )}
@@ -4129,6 +4206,23 @@ function Style() {
       }
       .tipo-opcao-ativa.income { background: rgba(10,85,80,0.2); border-color: #0a5550; color: #f5f5f7; }
       .tipo-opcao-ativa.expense { background: rgba(138,53,53,0.2); border-color: #8a3535; color: #f5f5f7; }
+
+      .modal-sheet.tipo-despesa .form-input:focus,
+      .modal-sheet.tipo-despesa .form-select:focus {
+        border-color: #8a3535;
+        box-shadow: 0 0 0 2px rgba(138,53,53,0.15);
+      }
+      .modal-sheet.tipo-despesa .form-select-aberto {
+        border-color: #8a3535;
+        box-shadow: 0 0 0 2px rgba(138,53,53,0.15);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%238a3535' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      }
+      .modal-sheet.tipo-despesa .form-botao:not(.form-botao-perigo):not(.form-botao-secundario) {
+        background: #8a3535;
+      }
+      .modal-sheet.tipo-despesa .form-botao:not(.form-botao-perigo):not(.form-botao-secundario):hover {
+        background: #9c3d3d;
+      }
 
       .form-grupo { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
       .form-input {
