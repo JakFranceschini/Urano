@@ -88,6 +88,20 @@ function fmtUSD(v) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(v);
 }
 
+function formatarBRLInput(raw) {
+  const digitos = String(raw ?? "").replace(/\D/g, "");
+  if (!digitos) return "";
+  const centavos = parseInt(digitos, 10);
+  return (centavos / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseBRLInput(formatado) {
+  const s = String(formatado ?? "").trim();
+  if (!s) return 0;
+  const n = parseFloat(s.replace(/\./g, "").replace(",", "."));
+  return isNaN(n) ? 0 : n;
+}
+
 function sinal(v) { return v > 0 ? "+" : ""; }
 
 function sinalCompleto(v) { return v > 0 ? "+" : v < 0 ? "-" : ""; }
@@ -1490,64 +1504,35 @@ function CardResumoInvestimentos({ totais }) {
   );
 }
 
-function BarraAlocacao({ dados, onHoverItem, hoveredIdx }) {
-  const total = dados.reduce((s, d) => s + d.pct, 0) || 1;
-
+function BarraAlocacao({ dados }) {
   return (
     <SubCard>
-
-      <div style={{ display: "flex", height: 36, borderRadius: "var(--radius-md)", overflow: "hidden", gap: 2 }}>
-        {dados.map((d, i) => {
-          const isHov = hoveredIdx === i;
-          const cor = PALETA_ALOCACAO[i % PALETA_ALOCACAO.length];
-          return (
-            <div
-              key={d.titulo}
-              onMouseEnter={() => onHoverItem(i)}
-              onMouseLeave={() => onHoverItem(null)}
-              style={{
-                flex: d.pct / total,
-                background: cor,
-                position: "relative",
-                transition: "flex 0.45s ease, filter 0.2s, transform 0.2s",
-                cursor: "default",
-                filter: hoveredIdx !== null && !isHov ? "brightness(0.45) saturate(0.5)" : "brightness(1)",
-                transform: isHov ? "scaleY(1.06)" : "scaleY(1)",
-                minWidth: d.pct < 2 ? 4 : 0,
-                overflow: "hidden",
-              }}
-              title={`${d.titulo}: ${d.pct.toFixed(1)}%`}
-            />
-          );
-        })}
-      </div>
-
-      <div style={{ marginTop: "var(--space-3)", marginBottom: "calc(var(--space-4) * -1)" }}>
+      <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
         {dados.map((d, i) => {
           const cor = PALETA_ALOCACAO[i % PALETA_ALOCACAO.length];
           return (
-            <ListRow
-              key={d.titulo}
-              onMouseEnter={() => onHoverItem(i)}
-              onMouseLeave={() => onHoverItem(null)}
-              label={
-                <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
-                    <span style={{ width: 8, height: 8, borderRadius: "50%", background: cor, flexShrink: 0 }} />
-                    {d.titulo}
+            <div key={d.titulo} className="alocacao-item">
+              <ListRow
+                label={
+                  <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-2)" }}>
+                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: cor, flexShrink: 0 }} />
+                      {d.titulo}
+                    </span>
+                    {d.ideal > 0 && (
+                      <span className="list-row-tag">Meta {d.ideal.toFixed(1)}%</span>
+                    )}
                   </span>
-                  {d.ideal > 0 && (
-                    <span className="list-row-tag">Meta {d.ideal.toFixed(1)}%</span>
-                  )}
-                </span>
-              }
-              value={`${d.pct.toFixed(1)}%`}
-              sub={d.diff != null ? `${sinal(d.diff)}${d.diff.toFixed(2)}%` : undefined}
-              subColor={corVar(d.diff)}
-              plain
-              highlight={hoveredIdx === i}
-              highlightColor={cor}
-            />
+                }
+                value={`${d.pct.toFixed(1)}%`}
+                sub={d.diff != null ? `${sinal(d.diff)}${d.diff.toFixed(2)}%` : undefined}
+                subColor={corVar(d.diff)}
+                plain
+              />
+              <div className="alocacao-mini-barra">
+                <div className="alocacao-mini-barra-fill" style={{ width: `${Math.max(Math.min(d.pct, 100), 0)}%`, background: cor }} />
+              </div>
+            </div>
           );
         })}
       </div>
@@ -1556,7 +1541,6 @@ function BarraAlocacao({ dados, onHoverItem, hoveredIdx }) {
 }
 
 function CardAlocacao({ alocacao, onEditar }) {
-  const [hoveredIdx, setHoveredIdx] = useState(null);
   if (!alocacao?.length) return null;
   const a = alocacao[0];
 
@@ -1584,7 +1568,7 @@ function CardAlocacao({ alocacao, onEditar }) {
         )}
       </div>
 
-      <BarraAlocacao dados={dados} onHoverItem={setHoveredIdx} hoveredIdx={hoveredIdx} />
+      <BarraAlocacao dados={dados} />
     </Card>
   );
 }
@@ -2195,12 +2179,6 @@ async function salvarLancamentos(transactions, metaDespesa) {
 function CardFinancasResumo({ totais, meta, gasto, onEditarMeta }) {
   const corNet = corVar(totais.net);
 
-  const compareTotal = totais.income + totais.expense || 1;
-  const pctIncome  = (totais.income  / compareTotal) * 100;
-  const pctExpense = (totais.expense / compareTotal) * 100;
-  const savingsRate = totais.income > 0 ? ((totais.income - totais.expense) / totais.income) * 100 : 0;
-  const temDados = totais.income > 0 || totais.expense > 0;
-
   const restante = meta - gasto;
   const excedeu  = meta > 0 && gasto > meta;
   const pct      = meta > 0 ? Math.min((gasto / meta) * 100, 100) : 0;
@@ -2244,30 +2222,6 @@ function CardFinancasResumo({ totais, meta, gasto, onEditarMeta }) {
           />
         </div>
       </SubCard>
-
-      {temDados && (
-        <SubCard>
-          <div className="card-header" style={{ marginBottom: "var(--space-2)" }}>
-            <span className="campo-titulo">Receita vs despesa</span>
-          </div>
-
-          <div className="barra-track">
-            <div className="barra-fill left"  style={{ width: `${pctIncome}%`,  background: COR_ALTA  }} title={`Receitas: ${pctIncome.toFixed(1)}%`} />
-            <div className="barra-fill right" style={{ width: `${pctExpense}%`, background: COR_BAIXA }} title={`Despesas: ${pctExpense.toFixed(1)}%`} />
-          </div>
-
-          <div style={{ marginTop: "var(--space-3)", marginBottom: "calc(var(--space-4) * -1)" }}>
-            <ListRow label={`Receitas (${pctIncome.toFixed(1)}%)`}  value={`+${fmtBRL(totais.income)}`}  valueColor={COR_ALTA}  plain />
-            <ListRow label={`Despesas (${pctExpense.toFixed(1)}%)`} value={`-${fmtBRL(totais.expense)}`} valueColor={COR_BAIXA} plain />
-            <ListRow
-              label={savingsRate > 0 ? "Está sobrando" : savingsRate < 0 ? "Está faltando" : "Está ok"}
-              value={`${sinal(savingsRate)}${savingsRate.toFixed(0)}%`}
-              valueColor={corVar(savingsRate)}
-              plain
-            />
-          </div>
-        </SubCard>
-      )}
 
       <SubCard>
         <div className="card-header" style={{ marginBottom: meta > 0 ? "var(--space-2)" : 0 }}>
@@ -2417,13 +2371,13 @@ function ModalLancamento({ form, editando, onChange, onSalvar, onExcluir, onFech
           className={`tipo-opcao${form.type === "income" ? " tipo-opcao-ativa income" : ""}`}
           onClick={() => onChange({ ...form, type: "income" })}
         >
-          ↑ Receita
+          Receita
         </button>
         <button
           className={`tipo-opcao${form.type === "expense" ? " tipo-opcao-ativa expense" : ""}`}
           onClick={() => onChange({ ...form, type: "expense" })}
         >
-          ↓ Despesa
+          Despesa
         </button>
       </div>
 
@@ -2615,11 +2569,11 @@ function ModalListaAnos({ titulo, campos, linhas, onChange, onSalvar, onFechar }
 
   return (
     <ModalFinancas titulo={titulo} onFechar={onFechar}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
+      <div className="lista-anos-wrap">
         {linhas.map((linha, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)", paddingBottom: "var(--space-3)", borderBottom: "1px solid var(--border2)" }}>
-            <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--space-3)" }}>
-              <div className="form-grupo" style={{ flex: 1 }}>
+          <div key={i} className="lista-anos-linha">
+            <div className="lista-anos-linha-header">
+              <div className="form-grupo lista-anos-ano">
                 <label className="campo-titulo">Ano</label>
                 <input
                   className="form-input"
@@ -2630,31 +2584,37 @@ function ModalListaAnos({ titulo, campos, linhas, onChange, onSalvar, onFechar }
                   onChange={e => atualizarLinha(i, "ano", e.target.value)}
                 />
               </div>
+              {campos.map(c => (
+                <div className="form-grupo lista-anos-valor" key={c.key}>
+                  <label className="campo-titulo">{c.label}</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="0,00"
+                    value={linha[c.key] ?? ""}
+                    onChange={e => atualizarLinha(i, c.key, formatarBRLInput(e.target.value))}
+                  />
+                </div>
+              ))}
               <button
-                className="form-botao form-botao-perigo"
-                style={{ padding: "var(--space-3) var(--space-3)", flexShrink: 0, fontSize: 13, whiteSpace: "nowrap" }}
+                className="btn-remover-linha"
                 onClick={() => removerLinha(i)}
                 aria-label="Remover ano"
                 title="Remover ano"
               >
-                Remover
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
-            {campos.map(c => (
-              <div className="form-grupo" key={c.key}>
-                <label className="campo-titulo">{c.label}</label>
-                <input
-                  className="form-input"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0,00"
-                  value={linha[c.key] ?? ""}
-                  onChange={e => atualizarLinha(i, c.key, e.target.value)}
-                />
-              </div>
-            ))}
           </div>
         ))}
+
+        {linhas.length === 0 && (
+          <div className="lista-anos-vazio">Nenhum ano cadastrado ainda.</div>
+        )}
       </div>
 
       <button className="form-botao form-botao-secundario" onClick={adicionarLinha}>+ Adicionar ano</button>
@@ -2666,19 +2626,23 @@ function ModalListaAnos({ titulo, campos, linhas, onChange, onSalvar, onFechar }
 function ModalMetasAlocacao({ form, onChange, onSalvar, onFechar }) {
   return (
     <ModalFinancas titulo="Metas de alocação" onFechar={onFechar}>
-      {ALOCACAO_CLASSES.map(c => (
-        <div className="form-grupo" key={c.sufixo}>
-          <label className="campo-titulo">{c.titulo} — meta (%)</label>
-          <input
-            className="form-input"
-            type="text"
-            inputMode="decimal"
-            placeholder="0"
-            value={form[c.sufixo] ?? ""}
-            onChange={e => onChange({ ...form, [c.sufixo]: e.target.value })}
-          />
-        </div>
-      ))}
+      <div className="lista-anos-wrap">
+        {ALOCACAO_CLASSES.map(c => (
+          <div className="lista-anos-linha" key={c.sufixo}>
+            <div className="form-grupo">
+              <label className="campo-titulo">Definir meta para {c.titulo}</label>
+              <input
+                className="form-input input-meta-alocacao"
+                type="text"
+                inputMode="decimal"
+                placeholder="0"
+                value={form[c.sufixo] ?? ""}
+                onChange={e => onChange({ ...form, [c.sufixo]: e.target.value })}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
 
       <button className="form-botao" onClick={onSalvar}>Salvar metas</button>
     </ModalFinancas>
@@ -2987,14 +2951,14 @@ export default function App() {
 
   function abrirEdicaoProventos() {
     setFormProventos(
-      (dadosLocais.proventos ?? []).map(r => ({ ano: String(r.ano ?? ""), total_ano: numParaTexto(r.total_ano) }))
+      (dadosLocais.proventos ?? []).map(r => ({ ano: String(r.ano ?? ""), total_ano: formatarBRLInput(String(Math.round(toFloat(r.total_ano) * 100))) }))
     );
     setProventosModalAberto(true);
   }
 
   function salvarProventos() {
     const proventos = formProventos
-      .map(r => ({ ano: String(r.ano ?? "").trim(), total_ano: toFloat(r.total_ano) }))
+      .map(r => ({ ano: String(r.ano ?? "").trim(), total_ano: parseBRLInput(r.total_ano) }))
       .filter(r => r.ano);
     setDadosLocais(prev => ({ ...prev, proventos }));
     setProventosModalAberto(false);
@@ -3005,7 +2969,7 @@ export default function App() {
     setFormEvolucao(
       (dadosLocais.evolucao ?? [])
         .filter(r => String(r.ano ?? "") !== anoAtual)
-        .map(r => ({ ano: String(r.ano ?? ""), valor: numParaTexto(r.valor) }))
+        .map(r => ({ ano: String(r.ano ?? ""), valor: formatarBRLInput(String(Math.round(toFloat(r.valor) * 100))) }))
     );
     setEvolucaoModalAberto(true);
   }
@@ -3013,7 +2977,7 @@ export default function App() {
   function salvarEvolucao() {
     const anoAtual = String(new Date().getFullYear());
     const evolucao = formEvolucao
-      .map(r => ({ ano: String(r.ano ?? "").trim(), valor: toFloat(r.valor) }))
+      .map(r => ({ ano: String(r.ano ?? "").trim(), valor: parseBRLInput(r.valor) }))
       .filter(r => r.ano && r.ano !== anoAtual)
       .sort((a, b) => parseInt(a.ano, 10) - parseInt(b.ano, 10));
 
@@ -4233,6 +4197,7 @@ function Style() {
       }
 
       .form-grupo { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+      .input-meta-alocacao { width: 84px; text-align: center; }
       .form-input {
         background: var(--bg3);
         border: 1px solid var(--border2);
@@ -4309,6 +4274,86 @@ function Style() {
       .form-botao-perigo:hover { background: rgba(138,53,53,0.12); }
       .form-botao-secundario { background: transparent; border: 1px solid var(--border2); color: var(--color-label); }
       .form-botao-secundario:hover { background: var(--bg3); color: var(--color-value); }
+
+            .lista-anos-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+      }
+      .lista-anos-linha {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-3);
+        background: var(--bg3);
+        border: 1px solid var(--border2);
+        border-radius: var(--radius-md);
+        padding: var(--space-4);
+        transition: border-color 0.15s ease;
+      }
+      .lista-anos-linha:focus-within {
+        border-color: rgba(10,85,80,0.5);
+      }
+      .lista-anos-linha-header {
+        display: flex;
+        align-items: flex-end;
+        gap: var(--space-3);
+      }
+      .lista-anos-ano {
+        flex: 0 0 auto;
+        min-width: 0;
+        max-width: 100px;
+      }
+      .lista-anos-valor {
+        flex: 1;
+        min-width: 0;
+      }
+      .alocacao-item {
+        position: relative;
+        padding-bottom: var(--space-2);
+      }
+      .alocacao-item:not(:last-child) {
+        margin-bottom: var(--space-1);
+      }
+      .alocacao-item .list-row::after { display: none; }
+      .alocacao-item .list-row { padding-bottom: var(--space-1); }
+      .alocacao-mini-barra {
+        display: block;
+        width: 100%;
+        height: 6px;
+        border-radius: var(--radius-pill);
+        background: var(--bg4);
+        overflow: hidden;
+      }
+      .alocacao-mini-barra-fill {
+        display: block;
+        height: 100%;
+        border-radius: var(--radius-pill);
+        transition: width 0.45s ease;
+      }
+      .btn-remover-linha {
+        background: rgba(138,53,53,0.12);
+        border: 1px solid rgba(138,53,53,0.3);
+        color: #c0504a;
+        width: 42px;
+        height: 42px;
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+        margin-left: auto;
+        transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .btn-remover-linha:hover { background: rgba(138,53,53,0.22); border-color: rgba(138,53,53,0.5); }
+      .btn-remover-linha:active { transform: scale(0.92); }
+      .lista-anos-vazio {
+        color: var(--color-label);
+        font-size: 14px;
+        text-align: center;
+        padding: var(--space-4) 0;
+      }
 
             .loading-page {
         height: 100vh;
