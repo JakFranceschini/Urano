@@ -658,17 +658,14 @@ function BotaoFiltroTrigger({ children, onClick, ativo, open }) {
       <span ref={btnRef} className="btn-texto">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <line x1="4" y1="6" x2="20" y2="6" />
-          <circle cx="9" cy="6" r="2" fill="var(--bg2)" />
+          <circle cx="9" cy="6" r="2" fill="var(--bg3)" />
           <line x1="4" y1="12" x2="20" y2="12" />
-          <circle cx="15" cy="12" r="2" fill="var(--bg2)" />
+          <circle cx="15" cy="12" r="2" fill="var(--bg3)" />
           <line x1="4" y1="18" x2="20" y2="18" />
-          <circle cx="11" cy="18" r="2" fill="var(--bg2)" />
+          <circle cx="11" cy="18" r="2" fill="var(--bg3)" />
         </svg>
         {children}
       </span>
-      <svg className={`btn-ver-icon ${open ? "is-open" : ""}`} width="12" height="7" viewBox="0 0 12 7" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M1 1L6 6L11 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
     </button>
   );
 }
@@ -682,20 +679,8 @@ function BotaoVer({ onClick, open }) {
   };
 
   return (
-    <button className="btn-ver" onClick={handleClick} aria-label={open ? "Ocultar" : "Ver mais"}>
+    <button className="btn-tema" onClick={handleClick} aria-label={open ? "Ocultar" : "Ver mais"}>
       <span ref={btnRef} className="btn-texto">
-        {open ? (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 3l18 18" />
-            <path d="M10.6 5.2A10.4 10.4 0 0 1 12 5c6 0 9.6 5.5 9.9 7 -.2.9-.9 2.4-2.1 3.8M6.5 6.6C3.9 8.1 2.3 10.5 2.1 12c.5 2.5 3.4 7 9.9 7 1.4 0 2.6-.2 3.7-.6" />
-            <path d="M9.5 9.6a3.3 3.3 0 0 0 4.6 4.7" />
-          </svg>
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M2.1 12c.5-2.5 4.1-7 9.9-7s9.4 4.5 9.9 7c-.5 2.5-4.1 7-9.9 7s-9.4-4.5-9.9-7Z" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-        )}
         <svg className={`btn-ver-icon ${open ? "is-open" : ""}`} width="12" height="7" viewBox="0 0 12 7" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M1 1L6 6L11 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
@@ -815,7 +800,7 @@ function LogoAtivo({ ticker, size = 72, offsetX = 0, className = "" }) {
         width: size, height: size, background: "var(--accent)",
         borderRadius: 14, display: "flex", alignItems: "center",
         justifyContent: "center", fontSize: size * 0.42,
-        fontWeight: 500, color: "var(--color-title)", flexShrink: 0,
+        fontWeight: 500, color: "#f5f5f7", flexShrink: 0,
         marginLeft: offsetX,
         fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif'
       }}>
@@ -1298,19 +1283,17 @@ function CardPatrimonio({ totais, evolucao, onEditarEvolucao }) {
 
   return (
     <Card>
-      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="patrimonio" />Patrimônio</h2>
         </SubCard>
         {onEditarEvolucao && (
-          <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
-            <button className="btn-editar-icone" onClick={onEditarEvolucao} aria-label="Editar evolução do patrimônio" title="Editar evolução do patrimônio" style={{ margin: 0 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
-              </svg>
-            </button>
-          </SubCard>
+          <button className="btn-tema" onClick={onEditarEvolucao} aria-label="Editar evolução do patrimônio" title="Editar evolução do patrimônio">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+            </svg>
+          </button>
         )}
       </div>
 
@@ -1376,7 +1359,7 @@ function CustomTooltipEvolucao({ active, payload, label }) {
   return (
     <div className="chart-tooltip" style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif' }}>
       <div className="tooltip-label">{label}</div>
-      <div className="tooltip-val" style={{ color: "#ffffff" }}>{fmtBRL(payload[0].value)}</div>
+      <div className="tooltip-val" style={{ color: "var(--color-value)" }}>{fmtBRL(payload[0].value)}</div>
       {payload[1] && (
         <div className="tooltip-sub" style={{ color: corVar(payload[1].value) }}>
           {sinal(payload[1].value)}{fmtBRL(payload[1].value)}
@@ -1390,7 +1373,7 @@ function EvolucaoXTick({ x, y, payload }) {
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
   const fontSize = isMobile ? "clamp(8px, 1.8vw, 10px)" : 10;
   return (
-    <text x={x} y={y + 10} textAnchor="middle" fill="#909090" fontSize={fontSize} fontFamily='-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif'>
+    <text x={x} y={y + 10} textAnchor="middle" fill="#9a9d9c" fontSize={fontSize} fontFamily='-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif'>
       {payload.value}
     </text>
   );
@@ -1414,19 +1397,17 @@ function CardReserva({ reservas, alocacao, totais, onEditar }) {
 
   return (
     <Card>
-      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="reserva" />Reserva</h2>
         </SubCard>
         {onEditar && (
-          <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
-            <button className="btn-editar-icone" onClick={onEditar} aria-label="Editar reserva" title="Editar reserva" style={{ margin: 0 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
-              </svg>
-            </button>
-          </SubCard>
+          <button className="btn-tema" onClick={onEditar} aria-label="Editar reserva" title="Editar reserva">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+            </svg>
+          </button>
         )}
       </div>
 
@@ -1476,9 +1457,7 @@ function CardResumoInvestimentos({ totais }) {
   return (
     <Card>
       <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
-          <h2 className="card-titulo"><IconeCard nome="investimentos" />Investimentos</h2>
-        </div>
+        <h2 className="card-titulo"><IconeCard nome="investimentos" />Investimentos</h2>
       </SubCard>
 
       <SubCard>
@@ -1591,19 +1570,17 @@ function CardAlocacao({ alocacao, onEditar }) {
 
   return (
     <Card>
-      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="alocacao" />Alocação</h2>
         </SubCard>
         {onEditar && (
-          <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
-            <button className="btn-editar-icone" onClick={onEditar} aria-label="Editar metas de alocação" title="Editar metas de alocação" style={{ margin: 0 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
-              </svg>
-            </button>
-          </SubCard>
+          <button className="btn-tema" onClick={onEditar} aria-label="Editar metas de alocação" title="Editar metas de alocação">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+            </svg>
+          </button>
         )}
       </div>
 
@@ -1658,9 +1635,7 @@ function CardAporte({ ativos, alocacao }) {
   return (
     <Card>
       <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
-          <h2 className="card-titulo"><IconeCard nome="aporte" />Aporte</h2>
-        </div>
+        <h2 className="card-titulo"><IconeCard nome="aporte" />Aporte</h2>
       </SubCard>
 
       {classePrio && (() => {
@@ -1746,7 +1721,7 @@ function GraficoProventos({ porAno }) {
             fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif',
           }}>
             <div className="tooltip-label">{d.ano}</div>
-            <div className="tooltip-val" style={{ color: "#ffffff" }}>{fmtBRL(d.valor)}</div>
+            <div className="tooltip-val" style={{ color: "var(--color-value)" }}>{fmtBRL(d.valor)}</div>
             {diff !== null && (
               <div className="tooltip-sub" style={{ color: corVar(diff) }}>
                 {sinal(diff)}{fmtBRL(diff)}
@@ -1842,19 +1817,17 @@ function CardProventos({ proventos, onEditar }) {
 
   return (
     <Card>
-      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="proventos" />Proventos</h2>
         </SubCard>
         {onEditar && (
-          <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
-            <button className="btn-editar-icone" onClick={onEditar} aria-label="Editar proventos" title="Editar proventos" style={{ margin: 0 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
-              </svg>
-            </button>
-          </SubCard>
+          <button className="btn-tema" onClick={onEditar} aria-label="Editar proventos" title="Editar proventos">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+            </svg>
+          </button>
         )}
       </div>
 
@@ -2012,8 +1985,8 @@ function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = n
               <div className="ativo-nome-texto">{ativo.nome}</div>
             </div>
             {onEditar && (
-              <button className="btn-editar-icone" onClick={() => onEditar(ativo)} aria-label="Editar ativo" title="Editar ativo">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <button className="btn-tema btn-tema-subcard" onClick={() => onEditar(ativo)} aria-label="Editar ativo" title="Editar ativo">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 20h9" />
                   <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
                 </svg>
@@ -2234,11 +2207,17 @@ function CardFinancasResumo({ totais, meta, gasto, onEditarMeta }) {
 
   return (
     <Card>
-      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-        <div className="card-header">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
+        <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="financas" />Finanças</h2>
-        </div>
-      </SubCard>
+        </SubCard>
+        <button className="btn-tema" onClick={onEditarMeta} aria-label={meta > 0 ? "Editar meta" : "Definir meta"} title={meta > 0 ? "Editar meta" : "Definir meta"}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
+          </svg>
+        </button>
+      </div>
 
       <SubCard>
         <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
@@ -2293,12 +2272,6 @@ function CardFinancasResumo({ totais, meta, gasto, onEditarMeta }) {
       <SubCard>
         <div className="card-header" style={{ marginBottom: meta > 0 ? "var(--space-2)" : 0 }}>
           <span className="campo-titulo">{meta > 0 ? "Progresso do mês" : "Nenhuma meta definida"}</span>
-          <button className="btn-editar-icone" onClick={onEditarMeta} aria-label={meta > 0 ? "Editar" : "Definir meta"} title={meta > 0 ? "Editar" : "Definir meta"}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20h9" />
-              <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
-            </svg>
-          </button>
         </div>
 
         {meta > 0 ? (
@@ -2328,17 +2301,15 @@ function CardFinancasComparativo({ lancamentos, onEditar, onAdicionar }) {
 
   return (
     <Card>
-      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="seta-cima" />Receitas</h2>
         </SubCard>
-        <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
-          <button className="btn-editar-icone" onClick={() => onAdicionar("income")} aria-label="Adicionar receita" title="Adicionar receita" style={{ margin: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-        </SubCard>
+        <button className="btn-tema" onClick={() => onAdicionar("income")} aria-label="Adicionar receita" title="Adicionar receita">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
       </div>
 
       {receitas.length === 0 ? (
@@ -2378,17 +2349,15 @@ function CardFinancasMeta({ lancamentos, onEditarLancamento, onAdicionar }) {
 
   return (
     <Card>
-      <div style={{ display: "flex", alignItems: "stretch", justifyContent: "space-between", gap: "var(--space-3)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "var(--space-3)" }}>
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
           <h2 className="card-titulo"><IconeCard nome="seta-baixo" />Despesas</h2>
         </SubCard>
-        <SubCard className="subcard-titulo subcard-titulo-icon" style={{ flexShrink: 0, justifyContent: "center" }}>
-          <button className="btn-editar-icone" onClick={() => onAdicionar("expense")} aria-label="Adicionar despesa" title="Adicionar despesa" style={{ margin: 0 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </button>
-        </SubCard>
+        <button className="btn-tema" onClick={() => onAdicionar("expense")} aria-label="Adicionar despesa" title="Adicionar despesa">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
       </div>
 
       {despesas.length === 0 ? (
@@ -3213,30 +3182,31 @@ function Style() {
       svg:focus, svg *:focus { outline: none !important; }
 
             :root {
-        --bg:             #0f1010;
-        --bg2:            #141515;
-        --bg3:            #1a1c1c;
-        --bg4:            #242626;
-        --border:         #1c1e1e;
-        --border2:        #242626;
-        --text:           #f5f5f7;
-        --muted:          #909090;
+        --bg:             #0b0c0c;
+        --bg2:            #161718;
+        --bg3:            #1e2021;
+        --bg4:            #292b2c;
+        --border:         rgba(255, 255, 255, 0.065);
+        --border2:        rgba(255, 255, 255, 0.065);
+        --text:           #f3f2ee;
+        --muted:          #8d908f;
         --accent:         #0a5550;
         --accent-h:       #0d6e68;
         --accent-p:       #13a097;
         --sub:            #c2eeeb;
-        --color-title:    #f5f5f7;
-        --color-subtitle: #9e9e9e;
-        --color-label:    #8e8e93;
-        --color-value:    #f5f5f7;
-        --color-profit:   #0a5550;
-        --color-loss:     #8a3535;
-        --color-neutral:  #f5f5f7;
-        --navbar-bg:      rgba(24, 28, 28, 0.4);
-        --navbar-border:  rgba(255, 255, 255, 0.03);
+        --color-title:    #f3f2ee;
+        --color-subtitle: #a3a5a3;
+        --color-label:    #8d908f;
+        --color-value:    #f3f2ee;
+        --color-profit:   #2fb3a8;
+        --color-loss:     #c96a5f;
+        --color-neutral:  #f3f2ee;
+        --navbar-bg:      rgba(20, 22, 22, 0.55);
+        --navbar-border:  rgba(255, 255, 255, 0.05);
         --spinner-track:  rgba(10, 85, 80, 0.2);
 
-        --radius-card:    28px;
+        --radius-card:    24px;
+        --radius-subcard: calc(var(--radius-card) - 6px);
 
                 --space-1:  4px;
         --space-2:  8px;
@@ -3247,18 +3217,24 @@ function Style() {
         --space-7:  28px;
         --space-8:  32px;
 
-                --radius-sm:   10px;
-        --radius-md:   14px;
+                --radius-sm:   12px;
+        --radius-md:   16px;
         --radius-lg:   20px;
         --radius-pill: 99px;
 
-                --bar-track:  rgba(255, 255, 255, 0.05);
+                --bar-track:  rgba(255, 255, 255, 0.06);
         --bar-altura: 10px;
       }
 
       html, body, #root {
         height: 100%;
-        background: var(--bg);
+        background-color: var(--bg);
+        background-image:
+          url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+          radial-gradient(ellipse 900px 520px at 50% -12%, rgba(19,160,151,0.16), transparent 60%),
+          radial-gradient(ellipse 700px 460px at 105% 18%, rgba(10,85,80,0.12), transparent 55%),
+          radial-gradient(ellipse 800px 500px at -10% 90%, rgba(10,85,80,0.08), transparent 55%);
+        background-repeat: repeat, no-repeat, no-repeat, no-repeat;
         color: var(--text);
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
         -webkit-font-smoothing: antialiased;
@@ -3296,7 +3272,7 @@ function Style() {
         border: 1px solid var(--navbar-border);
         backdrop-filter: blur(20px);
         -webkit-backdrop-filter: blur(20px);
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
         transition: all 0.5s ease;
       }
       .navbar-inner {
@@ -3312,7 +3288,7 @@ function Style() {
             .btn-tema {
         background: var(--bg3);
         border: 1px solid var(--border2);
-        border-radius: 10px;
+        border-radius: 50%;
         width: 38px;
         height: 38px;
         display: flex;
@@ -3321,14 +3297,15 @@ function Style() {
         font-size: 17px;
         cursor: pointer;
         flex-shrink: 0;
-        transition: background 0.2s ease, box-shadow 0.2s ease;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
       }
       .btn-tema:hover {
         background: var(--bg4);
         box-shadow: 0 4px 16px rgba(10,85,80,0.25);
       }
-      .btn-tema:active { }
+      .btn-tema:active { transform: scale(0.96); }
+      .btn-tema-subcard { background: var(--bg3); }
 
             .navbar-search-inline {
         width: 240px;
@@ -3339,7 +3316,7 @@ function Style() {
         gap: var(--space-2);
         background: var(--bg3);
         border: 1px solid var(--border2);
-        border-radius: 14px;
+        border-radius: 999px;
         padding: 10px var(--space-3);
         transition: border-color 0.15s, box-shadow 0.15s;
       }
@@ -3371,9 +3348,9 @@ function Style() {
 
         background: var(--bg2);
         border: 1px solid var(--border2);
-        border-radius: 14px;
+        border-radius: var(--radius-md);
         overflow: hidden;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
         z-index: 200;
       }
       .navbar-search-box-desktop {
@@ -3426,7 +3403,7 @@ function Style() {
       .navbar-search-item:hover { background: var(--bg3); }
       .btn-tema svg,
       .navbar-search-icon {
-        color: #ffffff;
+        color: var(--color-value);
       }
 
       .navbar-logo {
@@ -3436,7 +3413,7 @@ function Style() {
         display: flex; align-items: center; justify-content: center;
         font-weight: 800; font-size: 18px; color: #f5f5f7; flex-shrink: 0;
       }
-      .navbar-titulo { font-size: 26px; font-weight: 700; color: var(--text); white-space: nowrap; }
+      .navbar-titulo { font-size: 26px; font-weight: 700; letter-spacing: -0.015em; color: var(--text); white-space: nowrap; }
 
             .navbar-nav { display: flex; align-items: center; min-width: 0; }
       .navbar-tabs {
@@ -3465,7 +3442,7 @@ function Style() {
         border-radius: var(--radius-pill);
         transition: color 0.2s ease, background 0.2s ease;
       }
-      .navbar-tab:hover { color: var(--color-value); }
+      .navbar-tab:hover { color: var(--color-value); background: rgba(255, 255, 255, 0.06); }
       .navbar-tab-ativo {
         background: var(--accent);
         color: #f5f5f7;
@@ -3478,7 +3455,7 @@ function Style() {
         position: fixed;
         inset: 0;
         z-index: 500;
-        background: rgba(10, 14, 14, 0.55);
+        background: rgba(9, 10, 10, 0.7);
         backdrop-filter: blur(28px);
         -webkit-backdrop-filter: blur(28px);
         display: flex;
@@ -3505,7 +3482,7 @@ function Style() {
         margin-top: var(--space-7);
       }
       .navbar-menu-overlay-item {
-        background: rgba(255, 255, 255, 0.04);
+        background: rgba(255, 255, 255, 0.045);
         border: 1px solid var(--border2);
         color: var(--color-label);
         font-family: inherit;
@@ -3518,7 +3495,7 @@ function Style() {
         transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
       }
       .navbar-menu-overlay-item:hover {
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(255, 255, 255, 0.08);
         color: var(--color-value);
       }
       .navbar-menu-overlay-item.is-ativo {
@@ -3621,7 +3598,7 @@ function Style() {
         display: flex;
         flex-direction: column;
         gap: var(--space-4) !important;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 10px 32px rgba(0, 0, 0, 0.32);
         backface-visibility: hidden;
         perspective: 1000px;
         transform: translate3d(0,0,0);
@@ -3630,7 +3607,8 @@ function Style() {
       }
       .card-titulo {
         font-size: 20px;
-        font-weight: 500;
+        font-weight: 700;
+        letter-spacing: -0.01em;
         color: var(--color-title);
         display: flex;
         align-items: center;
@@ -3646,20 +3624,20 @@ function Style() {
 
             .subcard {
         background: var(--bg3);
-        border-radius: var(--radius-card);
+        border-radius: var(--radius-subcard);
         border: 1px solid var(--border2);
         padding: var(--space-5) !important;
         display: flex;
         flex-direction: column;
         gap: var(--space-1) !important;
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
         transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.3s ease;
         position: relative;
         overflow: hidden;
       }
       .subcard-titulo {
         padding: var(--space-2) var(--space-4) !important;
-        border-radius: var(--radius-card) !important;
+        border-radius: var(--radius-subcard) !important;
       }
       .subcard-titulo-icon {
         padding: var(--space-2) !important;
@@ -3675,7 +3653,8 @@ function Style() {
       }
       .campo-valor {
         font-size: 31px;
-        font-weight: 400;
+        font-weight: 700;
+        letter-spacing: -0.02em;
         line-height: 1.05;
         color: var(--color-value);
         text-rendering: optimizeLegibility;
@@ -3683,7 +3662,7 @@ function Style() {
         font-variant-numeric: tabular-nums;
       }
 
-            .divisor { margin-top: 15px; height: 1px; background: var(--border2); border: none; }
+            .divisor { margin-top: 15px; height: 0; border-top: 1px solid var(--border2); }
 
             .hero-valor { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
       .hero-valor-titulo { font-size: 14px; letter-spacing: 0.05em; }
@@ -3716,7 +3695,7 @@ function Style() {
 
             .tile {
         background: var(--bg4);
-        border: 1px solid rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--border2);
         border-radius: var(--radius-lg);
         padding: var(--space-4);
         display: flex;
@@ -3808,7 +3787,7 @@ function Style() {
       }
       .dropdown-item.is-ativo {
         background: var(--accent);
-        color: var(--text);
+        color: #f5f5f7;
         border-color: rgba(5, 120, 112, 0.4);
         font-weight: 600;
       }
@@ -3854,8 +3833,8 @@ function Style() {
         left: var(--row-pad-x);
         right: var(--row-pad-x);
         bottom: 0;
-        height: 1px;
-        background: var(--border2);
+        height: 0;
+        border-bottom: 1px solid var(--border2);
         transition: opacity 0.15s ease;
       }
       .list-row-clickable {
@@ -3863,13 +3842,13 @@ function Style() {
         margin: 0 -10px;
         padding-left: calc(var(--row-pad-x) + 10px);
         padding-right: calc(var(--row-pad-x) + 10px);
-        border-radius: var(--radius-md);
+        border-radius: var(--radius-subcard);
         border: 1px solid transparent;
         transition: background 0.15s ease, border-color 0.15s ease;
       }
       .list-row-clickable:hover {
-        background: rgba(255,255,255,0.045);
-        border-color: rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.05);
+        border-color: rgba(255,255,255,0.09);
       }
       .list-row-clickable:hover::after { opacity: 0; }
       .list-row-left { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
@@ -3911,7 +3890,7 @@ function Style() {
         margin: 0 -10px;
         padding-left: 10px;
         padding-right: 10px;
-        border-radius: var(--radius-md);
+        border-radius: var(--radius-subcard);
         background: var(--hl-bg, rgba(19, 160, 151, 0.08));
         box-shadow: inset 0 0 0 1px var(--hl-border, rgba(19, 160, 151, 0.5));
       }
@@ -3922,7 +3901,7 @@ function Style() {
         position: relative;
         margin: -10px;
         padding: 10px;
-        border-radius: var(--radius-md);
+        border-radius: var(--radius-subcard);
         background: rgba(19, 160, 151, 0.08);
         box-shadow: inset 0 0 0 1px rgba(19, 160, 151, 0.5);
       }
@@ -3939,10 +3918,9 @@ function Style() {
         .list-row-sub { font-size: 10px; }
       }
 
-            .btn-ver,
-      .btn-filtro-simples {
+            .btn-ver {
         background: transparent;
-        color: #ffffff;
+        color: var(--color-value);
         border: none;
         padding: var(--space-1) 6px;
         font-size: 14px;
@@ -3952,22 +3930,37 @@ function Style() {
         display: inline-flex;
         align-items: center;
         position: relative;
-        border-radius: 6px;
-        transition: color 0.2s ease;
+        border-radius: var(--radius-md);
+        transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease;
         gap: var(--space-2);
         -webkit-tap-highlight-color: transparent;
-      }
-      .btn-ver {
         text-align: right;
         justify-content: flex-end;
         margin-right: -6px;
         margin-left: auto;
       }
       .btn-filtro-simples {
-        text-align: center;
+        background: var(--bg3);
+        color: var(--color-value);
+        border: 1px solid var(--border2);
+        padding: var(--space-3);
+        font-size: 14px;
+        cursor: pointer;
+        font-weight: 600;
+        white-space: nowrap;
+        display: inline-flex;
+        align-items: center;
         justify-content: center;
-        min-width: auto;
+        text-align: center;
+        position: relative;
+        border-radius: 999px;
+        transition: color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+        gap: var(--space-2);
+        min-width: 38px;
+        min-height: 38px;
         width: auto;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        -webkit-tap-highlight-color: transparent;
       }
       .btn-texto {
         display: inline-flex;
@@ -3998,20 +3991,30 @@ function Style() {
       .btn-ver-icon.is-open {
         transform: rotate(180deg);
       }
-      .btn-ver:hover,
-      .btn-filtro-simples:hover {
+      .btn-ver:hover {
         color: #0a5550;
+        background: rgba(255, 255, 255, 0.08);
       }
-      .btn-ver:active,
-      .btn-filtro-simples:active {
+      .btn-ver:active {
         color: #0a5550;
+        background: rgba(255, 255, 255, 0.05);
+        transform: scale(0.97);
+      }
+      .btn-filtro-simples:hover {
+        background: var(--bg4);
+        box-shadow: 0 4px 16px rgba(10,85,80,0.25);
+      }
+      .btn-filtro-simples:active {
+        transform: scale(0.96);
       }
       .btn-filtro-simples-ativo {
         color: #0a5550;
+        border-color: #0a5550;
+        background: rgba(10, 85, 80, 0.15);
       }
       .btn-editar-icone {
         background: transparent;
-        color: #ffffff;
+        color: var(--color-value);
         border: none;
         padding: 4px;
         margin-right: -4px;
@@ -4020,13 +4023,18 @@ function Style() {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border-radius: 6px;
-        transition: color 0.2s ease, background 0.2s ease;
+        border-radius: var(--radius-md);
+        transition: color 0.2s ease, background 0.2s ease, transform 0.15s ease;
         -webkit-tap-highlight-color: transparent;
       }
-      .btn-editar-icone:hover,
+      .btn-editar-icone:hover {
+        color: #0a5550;
+        background: rgba(255, 255, 255, 0.08);
+      }
       .btn-editar-icone:active {
         color: #0a5550;
+        background: rgba(255, 255, 255, 0.05);
+        transform: scale(0.96);
       }
 
       @media (max-width: 640px) {
@@ -4067,7 +4075,7 @@ function Style() {
       @media (max-width: 380px)  { .heatmap-grid { grid-template-columns: repeat(2, 1fr); } }
 
       .heatmap-cell {
-        border-radius: 20px;
+        border-radius: 24px;
         padding: var(--space-3) var(--space-2);
         display: flex;
         flex-direction: column;
@@ -4126,7 +4134,7 @@ function Style() {
         align-items: center;
         justify-content: center;
         z-index: 99;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+        box-shadow: 0 6px 20px rgba(10,85,80,0.25);
         transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s cubic-bezier(0.34,1.56,0.64,1);
       }
       .fab-adicionar:hover {
@@ -4327,7 +4335,7 @@ function Style() {
         background: var(--accent);
         border-radius: 20px;
         display: flex; align-items: center; justify-content: center;
-        font-size: 38px; font-weight: 900; color: var(--color-title);
+        font-size: 38px; font-weight: 900; color: #f5f5f7;
       }
       .loading-logo-breathe {
         animation: logoBreathe 2.6s ease-in-out infinite;
@@ -4357,18 +4365,18 @@ function Style() {
       .root::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 
             @media (max-width: 1024px) {
-        :root { --radius-card: 24px; }
         .main { padding: 106px 18px 52px; gap: 22px; }
         .navbar { width: calc(100% - 36px); max-width: none; }
         .card { padding: var(--space-5) !important; gap: 14px; }
         .subcard { padding: 18px !important; gap: var(--space-3); }
+        .list-row { --row-pad-x: 18px; }
+        .list-row-plain { --row-pad-x: 0px; }
         .card-titulo { font-size: 18px; }
         .campo-valor { font-size: 28px; }
         .campo-titulo { font-size: 13px; }
       }
 
             @media (max-width: 640px) {
-        :root { --radius-card: 22px; }
         .main { padding: 96px var(--space-3) 40px; gap: var(--space-4); }
 
                 .navbar {
@@ -4403,17 +4411,18 @@ function Style() {
         .tooltip-val   { font-size: 13px; }
         .tooltip-sub   { font-size: 11px; }
 
-                .heatmap-cell { min-height: 66px; padding: var(--space-2) var(--space-1); border-radius: 20px; }
+                .heatmap-cell { min-height: 66px; padding: var(--space-2) var(--space-1); border-radius: var(--radius-md); }
         .hm-ticker { font-size: 12px; }
         .hm-pct    { font-size: 11px; }
         .hm-brl    { font-size: 14px; }
       }
 
             @media (max-width: 400px) {
-        :root { --radius-card: 20px; }
         .main { padding: 105px 10px 34px; gap: var(--space-4); }
         .card        { padding: var(--space-4) !important; gap: var(--space-4); }
         .subcard     { padding: 14px !important; gap: var(--space-2); }
+        .list-row    { --row-pad-x: 14px; }
+        .list-row-plain { --row-pad-x: 0px; }
         .subcard-titulo { padding: var(--space-1) var(--space-3) !important; }
         .campo-valor  { font-size: 19px; }
         .campo-titulo { font-size: 11px; }
@@ -4432,6 +4441,8 @@ function Style() {
         .main    { padding: 78px var(--space-2) var(--space-7); gap: 10px; }
         .card    { padding: 14px !important; gap: var(--space-2); }
         .subcard { padding: var(--space-3) !important; gap: 6px; }
+        .list-row { --row-pad-x: var(--space-3); }
+        .list-row-plain { --row-pad-x: 0px; }
         .subcard-titulo { padding: var(--space-1) var(--space-2) !important; }
         .campo-valor  { font-size: 17px; }
         .card-titulo  { font-size: 14px; }
