@@ -249,6 +249,8 @@ async function salvarDadosLocaisNuvem(dadosLocais) {
 
 const CLASSES_EM_DOLAR = ["stock", "reit", "etf"];
 
+const NOVO_ATIVO_MARCADOR = "__novo_ativo__";
+
 // Busca os dados extras de um ativo (dadosLocais.ativos) por ticker, ignorando
 // maiúsculas/minúsculas — compatível com chaves antigas salvas em maiúsculo.
 function buscarExtraAtivo(ativosExtra, ticker) {
@@ -269,11 +271,24 @@ function montarAtivos(ativosPlanilha, dadosLocais) {
   );
   const taxaDolar = linhaMoeda ? toFloat(linhaMoeda.cotacao) : 1;
 
-  const semPercentuais = (ativosPlanilha ?? [])
-    .filter(row => String(row.ticker ?? "").trim().toLowerCase() !== "dolar")
-    .map(row => {
-    const ticker = String(row.ticker ?? "").trim();
-    const cotacao = toFloat(row.cotacao);
+  const tickersDaPlanilha = new Set(
+    (ativosPlanilha ?? [])
+      .filter(row => String(row.ticker ?? "").trim().toLowerCase() !== "dolar")
+      .map(row => String(row.ticker ?? "").trim().toLowerCase())
+  );
+
+  // Linhas vindas da planilha (cotação automática) + ativos cadastrados manualmente
+  // que ainda não existem na planilha (usam a cotação informada no cadastro).
+  const linhas = [
+    ...(ativosPlanilha ?? [])
+      .filter(row => String(row.ticker ?? "").trim().toLowerCase() !== "dolar")
+      .map(row => ({ ticker: String(row.ticker ?? "").trim(), cotacao: toFloat(row.cotacao) })),
+    ...Object.keys(dadosLocais.ativos ?? {})
+      .filter(ticker => !tickersDaPlanilha.has(String(ticker).toLowerCase()))
+      .map(ticker => ({ ticker: String(ticker).trim(), cotacao: toFloat(dadosLocais.ativos[ticker]?.cotacao) })),
+  ];
+
+  const semPercentuais = linhas.map(({ ticker, cotacao }) => {
     const extra = buscarExtraAtivo(dadosLocais.ativos, ticker);
     const quantidade = toFloat(extra.quantidade);
     const preco_medio = toFloat(extra.preco_medio);
@@ -389,6 +404,14 @@ function IconeCard({ nome, size = 21 }) {
         <svg {...p} className="card-titulo-icone">
           <rect x="3" y="3" width="18" height="18" rx="2.5" />
           <path d="M6.5 15l4-4 3 3 4.5-5.5" />
+        </svg>
+      );
+    case "globo":
+      return (
+        <svg {...p} className="card-titulo-icone">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18" />
+          <path d="M12 3c2.8 2.5 4.4 5.6 4.4 9s-1.6 6.5-4.4 9c-2.8-2.5-4.4-5.6-4.4-9s1.6-6.5 4.4-9Z" />
         </svg>
       );
     case "alocacao":
@@ -1540,6 +1563,46 @@ function BarraAlocacao({ dados }) {
   );
 }
 
+function CardClassesAtivos({ totais, reservas }) {
+  if (!totais?.length) return null;
+  const t = totais[0];
+  const totalPatrimonio = toFloat(t.total_patrimonio);
+  const reservaAtual = toFloat(reservas?.[0]?.reserva_atual);
+
+  const dados = ALOCACAO_CLASSES.map((c) => {
+    const valor = c.sufixo === "reservas" ? reservaAtual : toFloat(t[`total_${c.sufixo}`]);
+    const pct   = totalPatrimonio > 0 ? (valor / totalPatrimonio) * 100 : 0;
+    return {
+      titulo: c.titulo,
+      sufixo: c.sufixo,
+      valor,
+      pct,
+    };
+  });
+
+  return (
+    <Card>
+      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
+        <h2 className="card-titulo"><IconeCard nome="alocacao" />Alocação do patrimônio</h2>
+      </SubCard>
+
+      <SubCard>
+        <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
+          {dados.map(d => (
+            <ListRow
+              key={d.sufixo}
+              label={d.titulo}
+              value={fmtBRL(d.valor)}
+              sub={`${d.pct.toFixed(1)}%`}
+              plain
+            />
+          ))}
+        </div>
+      </SubCard>
+    </Card>
+  );
+}
+
 function CardAlocacao({ alocacao, onEditar }) {
   if (!alocacao?.length) return null;
   const a = alocacao[0];
@@ -1569,6 +1632,56 @@ function CardAlocacao({ alocacao, onEditar }) {
       </div>
 
       <BarraAlocacao dados={dados} />
+    </Card>
+  );
+}
+
+const BRASIL_EXTERIOR_COR = { brasil: "#16bdb4", exterior: "#8d908f" };
+
+function CardBrasilExterior({ alocacao, totais }) {
+  if (!alocacao?.length || !totais?.length) return null;
+  const a = alocacao[0];
+  const t = totais[0];
+  const totalPatrimonio = toFloat(t.total_patrimonio);
+
+  const pctBrasil =
+    toFloat(a.alocacao_atual_acoes) +
+    toFloat(a.alocacao_atual_fiis) +
+    toFloat(a.alocacao_atual_reservas);
+
+  const pctExterior =
+    toFloat(a.alocacao_atual_stocks) +
+    toFloat(a.alocacao_atual_reits) +
+    toFloat(a.alocacao_atual_etfs) +
+    toFloat(a.alocacao_atual_bitcoins);
+
+  const valorBrasil   = (pctBrasil   / 100) * totalPatrimonio;
+  const valorExterior = (pctExterior / 100) * totalPatrimonio;
+
+  const dados = [
+    { titulo: "Brasil",   pct: pctBrasil,   valor: valorBrasil,   cor: BRASIL_EXTERIOR_COR.brasil   },
+    { titulo: "Exterior", pct: pctExterior, valor: valorExterior, cor: BRASIL_EXTERIOR_COR.exterior },
+  ];
+
+  return (
+    <Card>
+      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
+        <h2 className="card-titulo"><IconeCard nome="globo" />Brasil x Exterior</h2>
+      </SubCard>
+
+      <SubCard>
+        <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
+          {dados.map(d => (
+            <ListRow
+              key={d.titulo}
+              label={d.titulo}
+              value={`${d.pct.toFixed(1)}%`}
+              sub={fmtBRL(d.valor)}
+              plain
+            />
+          ))}
+        </div>
+      </SubCard>
     </Card>
   );
 }
@@ -1991,7 +2104,7 @@ function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = n
   );
 }
 
-function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, searchVersion, scrollRef, onEditarAtivo }) {
+function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, searchVersion, scrollRef, onEditarAtivo, onAdicionarAtivo }) {
   const [open, setOpen]               = useState(false);
   const [sortBy, setSortBy]           = useState(null);
   const [sortDir, setSortDir]         = useState("asc");
@@ -2073,9 +2186,19 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
     <Card>
       <div className="card-header">
         <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
-          <h2 className="card-titulo"><IconeCard nome={ICONE_POR_SUFIXO[sufixo]} />{titulo}</h2>
+          <h2 className="card-titulo">
+            <IconeCard nome={ICONE_POR_SUFIXO[sufixo]} />{titulo}
+            <span className="card-titulo-contador">{df.length}</span>
+          </h2>
         </SubCard>
-        <BotaoVer onClick={() => setOpen(o => !o)} open={open} />
+        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)" }}>
+          <button className="btn-tema" onClick={() => onAdicionarAtivo(classe)} aria-label={`Adicionar ${titulo}`} title={`Adicionar ${titulo}`}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+          <BotaoVer onClick={() => setOpen(o => !o)} open={open} />
+        </div>
       </div>
 
       <SubCard>
@@ -2282,8 +2405,8 @@ function CardFinancasComparativo({ lancamentos, onEditar, onAdicionar }) {
                   <span className="list-row-value" style={{ color: COR_ALTA }}>
                     +{fmtBRL(tx.value)}
                   </span>
-                  <button className="btn-editar-icone" onClick={() => onEditar(tx)} aria-label="Editar" title="Editar">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <button className="btn-tema btn-tema-linha" onClick={() => onEditar(tx)} aria-label="Editar" title="Editar">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 20h9" />
                       <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
                     </svg>
@@ -2330,8 +2453,8 @@ function CardFinancasMeta({ lancamentos, onEditarLancamento, onAdicionar }) {
                   <span className="list-row-value" style={{ color: COR_BAIXA }}>
                     -{fmtBRL(tx.value)}
                   </span>
-                  <button className="btn-editar-icone" onClick={() => onEditarLancamento(tx)} aria-label="Editar" title="Editar">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <button className="btn-tema btn-tema-linha" onClick={() => onEditarLancamento(tx)} aria-label="Editar" title="Editar">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 20h9" />
                       <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z" />
                     </svg>
@@ -2442,9 +2565,9 @@ function ModalMeta({ valor, onChange, onSalvar, onLimpar, temMeta, onFechar }) {
   );
 }
 
-function ModalAtivo({ ticker, form, onChange, onSalvar, onLimpar, temDados, onFechar }) {
+function ModalAtivo({ ticker, form, onChange, onSalvar, onLimpar, temDados, onFechar, isNovo }) {
   return (
-    <ModalFinancas titulo={`Editar ${String(ticker).toUpperCase()}`} onFechar={onFechar}>
+    <ModalFinancas titulo={isNovo ? "Novo ativo" : `Editar ${String(ticker).toUpperCase()}`} onFechar={onFechar}>
       <div className="form-grupo">
         <label className="campo-titulo">Ticker</label>
         <input
@@ -2453,7 +2576,7 @@ function ModalAtivo({ ticker, form, onChange, onSalvar, onLimpar, temDados, onFe
           value={form.ticker}
           onChange={e => onChange({ ...form, ticker: e.target.value.toUpperCase() })}
         />
-        {form.ticker.trim().toUpperCase() !== String(ticker).toUpperCase() && (
+        {!isNovo && form.ticker.trim().toUpperCase() !== String(ticker).toUpperCase() && (
           <span style={{ fontSize: 12, color: "var(--color-label)", marginTop: 4, display: "block" }}>
             Ao salvar, os dados deste ativo serão movidos de {String(ticker).toUpperCase()} para {form.ticker.trim().toUpperCase() || "—"}.
             Lembre-se de usar exatamente o mesmo ticker que está na planilha.
@@ -2516,7 +2639,7 @@ function ModalAtivo({ ticker, form, onChange, onSalvar, onLimpar, temDados, onFe
         />
       </div>
 
-      <button className="form-botao" onClick={onSalvar}>Salvar alterações</button>
+      <button className="form-botao" onClick={onSalvar}>{isNovo ? "Adicionar ativo" : "Salvar alterações"}</button>
 
       {temDados && (
         <button className="form-botao form-botao-perigo" onClick={onLimpar}>
@@ -2790,7 +2913,7 @@ export default function App() {
   const financasRef = useRef(null);
 
   const [ativoEditando, setAtivoEditando] = useState(null);
-  const [formAtivo, setFormAtivo]         = useState({ ticker: "", nome: "", classe: "", quantidade: "", preco_medio: "", porcentagem_meta: "" });
+  const [formAtivo, setFormAtivo]         = useState({ ticker: "", nome: "", classe: "", quantidade: "", preco_medio: "", porcentagem_meta: "", cotacao: "" });
 
   const [reservaModalAberto, setReservaModalAberto] = useState(false);
   const [formReserva, setFormReserva]                 = useState("");
@@ -2881,21 +3004,40 @@ export default function App() {
       quantidade: numParaTexto(extra.quantidade),
       preco_medio: numParaTexto(extra.preco_medio),
       porcentagem_meta: numParaTexto(extra.porcentagem_meta),
+      cotacao: numParaTexto(extra.cotacao),
     });
     setAtivoEditando(ativo.ticker);
   }
 
+  function abrirNovoAtivo(classePreSelecionada) {
+    setFormAtivo({
+      ticker: "",
+      nome: "",
+      classe: classePreSelecionada ?? "",
+      quantidade: "",
+      preco_medio: "",
+      porcentagem_meta: "",
+      cotacao: "",
+    });
+    setAtivoEditando(NOVO_ATIVO_MARCADOR);
+  }
+
   function salvarAtivo() {
     if (!ativoEditando) return;
-    const novoTicker = formAtivo.ticker.trim().toLowerCase() || String(ativoEditando).toLowerCase();
+    const isNovo = ativoEditando === NOVO_ATIVO_MARCADOR;
+    const novoTicker = formAtivo.ticker.trim().toLowerCase() || (isNovo ? "" : String(ativoEditando).toLowerCase());
+    if (!novoTicker) return; // ticker é obrigatório, principalmente ao criar um ativo novo
+
     setDadosLocais(prev => {
       const ativos = { ...prev.ativos };
       // Remove a chave antiga (pode estar em maiúsculo, de antes desta correção)
-      const chaveAntiga = Object.keys(ativos).find(
-        k => k.toLowerCase() === String(ativoEditando).toLowerCase()
-      );
-      if (chaveAntiga && chaveAntiga !== novoTicker) {
-        delete ativos[chaveAntiga];
+      if (!isNovo) {
+        const chaveAntiga = Object.keys(ativos).find(
+          k => k.toLowerCase() === String(ativoEditando).toLowerCase()
+        );
+        if (chaveAntiga && chaveAntiga !== novoTicker) {
+          delete ativos[chaveAntiga];
+        }
       }
       ativos[novoTicker] = {
         nome: formAtivo.nome.trim(),
@@ -2903,6 +3045,7 @@ export default function App() {
         quantidade: toFloat(formAtivo.quantidade),
         preco_medio: toFloat(formAtivo.preco_medio),
         porcentagem_meta: toFloat(formAtivo.porcentagem_meta),
+        cotacao: toFloat(formAtivo.cotacao),
       };
       return { ...prev, ativos };
     });
@@ -2910,7 +3053,10 @@ export default function App() {
   }
 
   function limparAtivo() {
-    if (!ativoEditando) return;
+    if (!ativoEditando || ativoEditando === NOVO_ATIVO_MARCADOR) {
+      setAtivoEditando(null);
+      return;
+    }
     setDadosLocais(prev => {
       const ativos = { ...prev.ativos };
       const chave = Object.keys(ativos).find(
@@ -3011,6 +3157,8 @@ export default function App() {
   const reservas  = [{ reserva_atual: dadosLocais.reserva_atual }];
 
   const ativoAtual = ativos.find(a => a.ticker === ativoEditando) ?? null;
+  const novoAtivoAberto = ativoEditando === NOVO_ATIVO_MARCADOR;
+  const modalAtivoAberto = novoAtivoAberto || !!ativoAtual;
 
   return (
     <>
@@ -3033,15 +3181,16 @@ export default function App() {
           {pagina === "patrimonio" && (
             <>
               <div id="sec-patrimonio"><CardPatrimonio totais={totais} evolucao={dadosLocais.evolucao} onEditarEvolucao={abrirEdicaoEvolucao} /></div>
-              <div id="sec-reserva"><CardReserva reservas={reservas} alocacao={alocacao} totais={totais} onEditar={abrirEdicaoReserva} /></div>
-              <div id="sec-resumo-investimentos-patrimonio"><CardResumoInvestimentos totais={totais} /></div>
+              <div id="sec-classes-patrimonio"><CardClassesAtivos totais={totais} reservas={reservas} /></div>
             </>
           )}
 
           {pagina === "investimentos" && (
             <>
               <div id="sec-resumo-investimentos"><CardResumoInvestimentos totais={totais} /></div>
+              <div id="sec-reserva"><CardReserva reservas={reservas} alocacao={alocacao} totais={totais} onEditar={abrirEdicaoReserva} /></div>
               <div id="sec-alocacao"><CardAlocacao alocacao={alocacao} onEditar={abrirEdicaoMetas} /></div>
+              <div id="sec-brasil-exterior"><CardBrasilExterior alocacao={alocacao} totais={totais} /></div>
               <div id="sec-aporte"><CardAporte ativos={ativos} alocacao={alocacao} /></div>
               <div id="sec-proventos"><CardProventos proventos={dadosLocais.proventos} onEditar={abrirEdicaoProventos} /></div>
               <div id="sec-heatmap"><CardHeatmap ativos={ativos} /></div>
@@ -3057,6 +3206,7 @@ export default function App() {
                     searchVersion={searchCmd?.v}
                     scrollRef={scrollRef}
                     onEditarAtivo={abrirEdicaoAtivo}
+                    onAdicionarAtivo={abrirNovoAtivo}
                   />
                 </div>
               ))}
@@ -3080,14 +3230,15 @@ export default function App() {
         </main>
       </div>
 
-      {ativoAtual && (
+      {modalAtivoAberto && (
         <ModalAtivo
-          ticker={ativoAtual.ticker}
+          ticker={novoAtivoAberto ? "" : ativoAtual.ticker}
+          isNovo={novoAtivoAberto}
           form={formAtivo}
           onChange={setFormAtivo}
           onSalvar={salvarAtivo}
           onLimpar={limparAtivo}
-          temDados={Object.keys(dadosLocais.ativos ?? {}).some(k => k.toLowerCase() === String(ativoEditando).toLowerCase())}
+          temDados={!novoAtivoAberto && Object.keys(dadosLocais.ativos ?? {}).some(k => k.toLowerCase() === String(ativoEditando).toLowerCase())}
           onFechar={() => setAtivoEditando(null)}
         />
       )}
@@ -3195,10 +3346,12 @@ function Style() {
         background-color: var(--bg);
         background-image:
           url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
-          radial-gradient(ellipse 900px 520px at 50% -12%, rgba(19,160,151,0.16), transparent 60%),
-          radial-gradient(ellipse 700px 460px at 105% 18%, rgba(10,85,80,0.12), transparent 55%),
-          radial-gradient(ellipse 800px 500px at -10% 90%, rgba(10,85,80,0.08), transparent 55%);
-        background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+          radial-gradient(ellipse 900px 520px at 50% -12%, rgba(255,255,255,0.05), transparent 60%),
+          radial-gradient(ellipse 700px 460px at 105% 18%, rgba(255,255,255,0.03), transparent 55%),
+          radial-gradient(ellipse 800px 500px at -10% 90%, rgba(255,255,255,0.02), transparent 55%),
+          linear-gradient(180deg, #131415 0%, #0e0f10 45%, #0b0c0c 100%);
+        background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+        background-attachment: scroll, scroll, scroll, scroll, fixed;
         color: var(--text);
         font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif;
         -webkit-font-smoothing: antialiased;
@@ -3270,6 +3423,7 @@ function Style() {
       }
       .btn-tema:active { transform: scale(0.96); }
       .btn-tema-subcard { background: var(--bg3); }
+      .btn-tema-linha { width: 32px; height: 32px; font-size: 14px; margin-left: var(--space-2); }
 
             .navbar-search-inline {
         width: 240px;
@@ -3830,6 +3984,15 @@ function Style() {
         color: var(--color-label);
         letter-spacing: 0.03em;
       }
+      .card-titulo-contador {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--color-label);
+        background: var(--bg4);
+        border-radius: var(--radius-pill);
+        padding: 1px 9px;
+        margin-left: var(--space-2);
+      }
       .list-row-right { display: flex; align-items: center; gap: var(--space-2); flex-shrink: 0; }
       .list-row-values { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-1); }
       .list-row-value {
@@ -4309,7 +4472,7 @@ function Style() {
       }
       .alocacao-item {
         position: relative;
-        padding-bottom: var(--space-2);
+        padding-bottom: var(--space-3);
       }
       .alocacao-item:not(:last-child) {
         margin-bottom: var(--space-1);
