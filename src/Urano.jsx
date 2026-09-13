@@ -800,6 +800,7 @@ function BotaoVer({ onClick, open }) {
 
 function Expandable({ open, children }) {
   const wrapRef = useRef(null);
+  const estadoAnteriorRef = useRef(undefined);
 
   const getParentGap = (el) => {
     const parent = el?.parentElement;
@@ -812,6 +813,25 @@ function Expandable({ open, children }) {
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
+
+    const anterior = estadoAnteriorRef.current;
+    estadoAnteriorRef.current = open;
+
+    // Primeira renderização (anterior === undefined) ou nenhuma mudança real
+    // de estado: aplica o resultado final direto, sem animar.
+    if (anterior === undefined || anterior === open) {
+      el.style.transition = "none";
+      if (open) {
+        el.style.height = "auto";
+        el.style.opacity = "1";
+      } else {
+        el.style.height = "0px";
+        el.style.opacity = "0";
+      }
+      el.style.marginTop = "0px";
+      el.style.marginBottom = "0px";
+      return;
+    }
 
     if (open) {
       el.style.marginTop = "0px";
@@ -1421,6 +1441,8 @@ function CardPatrimonio({ totais, evolucao, onEditarEvolucao }) {
           </div>
         </div>
 
+        <ListRow label="Aportado" value={fmtBRL(aportado)} plain />
+
         {!!totalUSD && (
           <ListRow label="Atual em USD" value={fmtUSD(totalUSD)} plain />
         )}
@@ -1428,8 +1450,8 @@ function CardPatrimonio({ totais, evolucao, onEditarEvolucao }) {
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
           <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
             <ListRow
-              label={`Variação (${pctVariacao.toFixed(1)}%)`}
-              value={`${sinal(diff)}${fmtBRL(diff)}`}
+              label="Variação"
+              value={`${sinal(diff)}${fmtBRL(diff)} (${pctVariacao.toFixed(1)}%)`}
               valueColor={corDiff}
               plain
             />
@@ -1437,11 +1459,6 @@ function CardPatrimonio({ totais, evolucao, onEditarEvolucao }) {
               label="Variação do dia"
               value={`${sinalCompleto(diffDia)}${fmtBRL(Math.abs(diffDia))} (${sinalCompleto(diffDiaPct)}${Math.abs(diffDiaPct).toFixed(2)}%)`}
               valueColor={corDiffDia}
-              plain
-            />
-            <ListRow
-              label={`Aportado (${pctAportado.toFixed(1)}%)`}
-              value={fmtBRL(aportado)}
               plain
             />
           </div>
@@ -1548,14 +1565,14 @@ function CardReserva({ reservas, alocacao, totais, onEditar }) {
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
           <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
             <ListRow
-              label={`${textoSF}${pctVariacao > 0 ? ` (${pctVariacao.toFixed(1)}%)` : ""}`}
-              value={`${ssf}${fmtBRL(valorD)}`}
+              label={textoSF}
+              value={`${ssf}${fmtBRL(valorD)}${pctVariacao > 0 ? ` (${pctVariacao.toFixed(1)}%)` : ""}`}
               valueColor={corDiferenca}
               plain
             />
             <ListRow
-              label={`Meta (${pctIdeal.toFixed(1)}%)`}
-              value={fmtBRL(valorIdeal)}
+              label="Meta"
+              value={`${fmtBRL(valorIdeal)} (${pctIdeal.toFixed(1)}%)`}
               plain
             />
           </div>
@@ -1598,11 +1615,13 @@ function CardResumoInvestimentos({ totais }) {
           </div>
         </div>
 
+        <ListRow label="Aportado" value={fmtBRL(aportado)} plain />
+
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
           <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
             <ListRow
-              label={`Variação (${pctVariacao.toFixed(1)}%)`}
-              value={`${sinal(diff)}${fmtBRL(diff)}`}
+              label="Variação"
+              value={`${sinal(diff)}${fmtBRL(diff)} (${pctVariacao.toFixed(1)}%)`}
               valueColor={corDiff}
               plain
             />
@@ -1610,11 +1629,6 @@ function CardResumoInvestimentos({ totais }) {
               label="Variação do dia"
               value={`${sinalCompleto(diffDia)}${fmtBRL(Math.abs(diffDia))} (${sinalCompleto(diffDiaPct)}${Math.abs(diffDiaPct).toFixed(2)}%)`}
               valueColor={corDiffDia}
-              plain
-            />
-            <ListRow
-              label={`Aportado (${pctAportado.toFixed(1)}%)`}
-              value={fmtBRL(aportado)}
               plain
             />
           </div>
@@ -2036,7 +2050,7 @@ function CardProventos({ proventos, onEditar }) {
   );
 }
 
-function HeatmapCell({ ativo }) {
+function HeatmapCell({ ativo, onSelectTicker }) {
   const [imgErr, setImgErr] = useState(false);
   const [hovered, setHovered] = useState(false);
   const pct    = toFloat(ativo.variacao_percentual);
@@ -2051,6 +2065,8 @@ function HeatmapCell({ ativo }) {
       className="heatmap-cell"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => onSelectTicker?.(ativo.ticker)}
+      title={`Ver ${ticker} na lista`}
       style={{
         background: cor,
         boxShadow: hovered ? `0 6px 24px ${cor}99, 0 2px 8px ${cor}55` : "none",
@@ -2069,7 +2085,7 @@ function HeatmapCell({ ativo }) {
   );
 }
 
-function CardHeatmap({ ativos }) {
+function CardHeatmap({ ativos, onSelectTicker }) {
   const [open, setOpen] = useState(false);
   if (!ativos?.length) return null;
 
@@ -2092,12 +2108,12 @@ function CardHeatmap({ ativos }) {
       </div>
       <SubCard>
         <div className="heatmap-grid">
-          {df.slice(0, LIMITE).map((at, i) => <HeatmapCell key={i} ativo={at} />)}
+          {df.slice(0, LIMITE).map((at, i) => <HeatmapCell key={i} ativo={at} onSelectTicker={onSelectTicker} />)}
         </div>
         {temMais && (
           <Expandable open={open}>
             <div className="heatmap-grid" style={{ marginTop: "var(--space-3)" }}>
-              {df.slice(LIMITE).map((at, i) => <HeatmapCell key={i} ativo={at} />)}
+              {df.slice(LIMITE).map((at, i) => <HeatmapCell key={i} ativo={at} onSelectTicker={onSelectTicker} />)}
             </div>
           </Expandable>
         )}
@@ -2317,11 +2333,13 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
           </div>
         </div>
 
+        <ListRow label="Aportado" value={fmtBRL(aportado)} plain />
+
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
           <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
             <ListRow
-              label={`Variação (${pctVariacao.toFixed(1)}%)`}
-              value={`${sinalCompleto(diff)}${fmtBRL(Math.abs(diff))}`}
+              label="Variação"
+              value={`${sinalCompleto(diff)}${fmtBRL(Math.abs(diff))} (${pctVariacao.toFixed(1)}%)`}
               valueColor={corDiff}
               plain
             />
@@ -2329,11 +2347,6 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
               label="Variação do dia"
               value={`${sinalCompleto(diffDia)}${fmtBRL(Math.abs(diffDia))} (${sinalCompleto(diffDiaPct)}${Math.abs(diffDiaPct).toFixed(2)}%)`}
               valueColor={corDiffDia}
-              plain
-            />
-            <ListRow
-              label={`Aportado (${pctAportado.toFixed(1)}%)`}
-              value={fmtBRL(aportado)}
               plain
             />
           </div>
@@ -3428,7 +3441,15 @@ export default function App() {
               <div id="sec-brasil-exterior"><CardBrasilExterior alocacao={alocacao} totais={totais} /></div>
               <div id="sec-aporte"><CardAporte ativos={ativos} alocacao={alocacao} /></div>
               <div id="sec-proventos"><CardProventos proventos={dadosLocais.proventos} onEditar={abrirEdicaoProventos} /></div>
-              <div id="sec-heatmap"><CardHeatmap ativos={ativos} /></div>
+              <div id="sec-heatmap">
+                <CardHeatmap
+                  ativos={ativos}
+                  onSelectTicker={(ticker) => {
+                    if (pagina !== "investimentos") irParaPagina("investimentos");
+                    setSearchCmd({ ticker, v: Date.now() });
+                  }}
+                />
+              </div>
               {CLASSES_ATIVOS.map(c => (
                 <div id={`sec-${c.sufixo}`} key={c.classe}>
                   <CardClasse
@@ -4215,11 +4236,12 @@ function Style() {
         padding-right: calc(var(--row-pad-x) + 10px);
         border-radius: var(--radius-subcard);
         border: 1px solid transparent;
-        transition: background 0.15s ease, border-color 0.15s ease;
+        transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       }
       .list-row-clickable:hover {
         background: rgba(255,255,255,0.05);
         border-color: rgba(255,255,255,0.09);
+        transform: scale(1.015);
       }
       .list-row-clickable:hover::after { opacity: 0; }
       .list-row-left { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
@@ -4462,7 +4484,7 @@ function Style() {
         align-items: center;
         justify-content: center;
         gap: var(--space-2);
-        cursor: default;
+        cursor: pointer;
         transition: filter 0.2s ease, transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease;
         min-height: 90px;
       }
