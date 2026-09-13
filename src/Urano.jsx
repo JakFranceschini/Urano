@@ -59,6 +59,7 @@ const ALOCACAO_CLASSES = [
 const PAGINAS = [
   { id: "patrimonio",     titulo: "Patrimônio"    },
   { id: "investimentos",  titulo: "Investimentos" },
+  { id: "cotacoes",       titulo: "Cotações"      },
   { id: "financas",       titulo: "Finanças"       },
 ];
 
@@ -249,6 +250,28 @@ async function salvarDadosLocaisNuvem(dadosLocais) {
 
 const CLASSES_EM_DOLAR = ["stock", "reit", "etf"];
 
+// Bolsa usada para montar o link do Google Finance por classe de ativo.
+// Ações e Fiis são negociados na B3 (BVMF); Stocks/Reits/Etfs usam NASDAQ como
+// padrão (a maioria dos tickers americanos comuns está lá; caso o ativo seja
+// negociado na NYSE, o Google Finance geralmente redireciona automaticamente).
+const BOLSA_POR_CLASSE = {
+  acao: "BVMF",
+  fii:  "BVMF",
+};
+
+function linkGoogleFinance(ticker, classe) {
+  const t = String(ticker ?? "").trim().toUpperCase();
+  if (!t) return null;
+  const c = String(classe ?? "").toLowerCase().trim();
+
+  if (c === "bitcoin") {
+    return `https://www.google.com/finance/quote/${t}-USD`;
+  }
+
+  const bolsa = BOLSA_POR_CLASSE[c] || "NASDAQ";
+  return `https://www.google.com/finance/quote/${t}:${bolsa}`;
+}
+
 const NOVO_ATIVO_MARCADOR = "__novo_ativo__";
 
 // Cotação do dólar usada para converter os ativos em dólar (stocks, reits, etfs)
@@ -288,13 +311,23 @@ function montarAtivos(ativosPlanilha, dadosLocais) {
   const linhas = [
     ...(ativosPlanilha ?? [])
       .filter(row => String(row.ticker ?? "").trim().toLowerCase() !== "dolar")
-      .map(row => ({ ticker: String(row.ticker ?? "").trim(), cotacao: toFloat(row.cotacao) })),
+      .map(row => ({
+        ticker: String(row.ticker ?? "").trim(),
+        cotacao: toFloat(row.cotacao),
+        cotacao_ontem: toFloat(row.cotacao_ontem),
+      })),
     ...Object.keys(dadosLocais.ativos ?? {})
       .filter(ticker => !tickersDaPlanilha.has(String(ticker).toLowerCase()))
-      .map(ticker => ({ ticker: String(ticker).trim(), cotacao: toFloat(dadosLocais.ativos[ticker]?.cotacao) })),
+      .map(ticker => ({
+        ticker: String(ticker).trim(),
+        cotacao: toFloat(dadosLocais.ativos[ticker]?.cotacao),
+        // Ativos cadastrados manualmente (fora da planilha) não têm cotação do dia
+        // anterior disponível — usa a cotação atual como base (sem variação diária).
+        cotacao_ontem: toFloat(dadosLocais.ativos[ticker]?.cotacao),
+      })),
   ];
 
-  const semPercentuais = linhas.map(({ ticker, cotacao }) => {
+  const semPercentuais = linhas.map(({ ticker, cotacao, cotacao_ontem }) => {
     const extra = buscarExtraAtivo(dadosLocais.ativos, ticker);
     const quantidade = toFloat(extra.quantidade);
     const preco_medio = toFloat(extra.preco_medio);
@@ -303,12 +336,19 @@ function montarAtivos(ativosPlanilha, dadosLocais) {
     const taxa = CLASSES_EM_DOLAR.includes(classe) ? taxaDolar : 1;
     const total_investido = quantidade * preco_medio * taxa;
     const total_atual = quantidade * cotacao * taxa;
+    const total_atual_ontem = quantidade * cotacao_ontem * taxa;
     const variacao_total = total_atual - total_investido;
     const variacao_percentual = total_investido > 0 ? (variacao_total / total_investido) * 100 : 0;
+
+    const variacao_dia = total_atual - total_atual_ontem;
+    const variacao_dia_percentual = total_atual_ontem > 0 ? (variacao_dia / total_atual_ontem) * 100 : 0;
+    const variacao_cotacao = cotacao - cotacao_ontem;
+    const variacao_cotacao_percentual = cotacao_ontem > 0 ? (variacao_cotacao / cotacao_ontem) * 100 : 0;
 
     return {
       ticker,
       cotacao,
+      cotacao_ontem,
       nome: extra.nome || ticker,
       classe,
       quantidade,
@@ -316,8 +356,13 @@ function montarAtivos(ativosPlanilha, dadosLocais) {
       porcentagem_meta: toFloat(extra.porcentagem_meta),
       total_investido,
       total_atual,
+      total_atual_ontem,
       variacao_total,
       variacao_percentual,
+      variacao_dia,
+      variacao_dia_percentual,
+      variacao_cotacao,
+      variacao_cotacao_percentual,
     };
   });
 
@@ -338,24 +383,37 @@ function calcularTotais(ativos, reservaAtual, taxaDolar) {
   const t = {};
   let totalInvestimentos = 0;
   let aportadoInvestimentos = 0;
+  let totalInvestimentosOntem = 0;
 
   CLASSES_ATIVOS.forEach(({ classe, sufixo }) => {
     const doClasse = ativos.filter(a => a.classe === classe);
-    const total    = doClasse.reduce((s, a) => s + a.total_atual, 0);
-    const aportado = doClasse.reduce((s, a) => s + a.total_investido, 0);
+    const total      = doClasse.reduce((s, a) => s + a.total_atual, 0);
+    const totalOntem = doClasse.reduce((s, a) => s + a.total_atual_ontem, 0);
+    const aportado   = doClasse.reduce((s, a) => s + a.total_investido, 0);
     t[`total_${sufixo}`]          = total;
+    t[`total_ontem_${sufixo}`]    = totalOntem;
     t[`total_aportado_${sufixo}`] = aportado;
     t[`diferenca_${sufixo}`]      = total - aportado;
-    totalInvestimentos    += total;
-    aportadoInvestimentos += aportado;
+    t[`diferenca_dia_${sufixo}`]  = total - totalOntem;
+    totalInvestimentos      += total;
+    aportadoInvestimentos   += aportado;
+    totalInvestimentosOntem += totalOntem;
   });
 
   const totalPatrimonio    = totalInvestimentos + reservaAtual;
+  const totalPatrimonioOntem = totalInvestimentosOntem + reservaAtual;
   const aportadoPatrimonio = aportadoInvestimentos + reservaAtual;
   t.total_patrimonio             = totalPatrimonio;
   t.total_aportado               = aportadoPatrimonio;
   t.total_diferenca_patrimonio   = totalPatrimonio - aportadoPatrimonio;
   t.total_patrimonio_usd         = taxaDolar > 0 ? totalPatrimonio / taxaDolar : 0;
+
+  t.total_investimentos          = totalInvestimentos;
+  t.total_investimentos_ontem    = totalInvestimentosOntem;
+  t.diferenca_dia_investimentos  = totalInvestimentos - totalInvestimentosOntem;
+
+  t.total_patrimonio_ontem       = totalPatrimonioOntem;
+  t.diferenca_dia_patrimonio     = totalPatrimonio - totalPatrimonioOntem;
 
   return [t];
 }
@@ -510,6 +568,13 @@ function IconeCard({ nome, size = 21 }) {
           <path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3" />
           <path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-3" />
           <path d="M16 12h4v4h-4a2 2 0 0 1 0-4Z" />
+        </svg>
+      );
+    case "cotacoes":
+      return (
+        <svg {...p} className="card-titulo-icone">
+          <path d="M3 17l5-5 4 4 8-9" />
+          <path d="M15 7h5v5" />
         </svg>
       );
     case "comparativo":
@@ -1318,8 +1383,12 @@ function CardPatrimonio({ totais, evolucao, onEditarEvolucao }) {
   const aportado  = toFloat(t.total_aportado);
   const diff      = toFloat(t.total_diferenca_patrimonio);
   const totalUSD  = toFloat(t.total_patrimonio_usd);
+  const totalOntem = toFloat(t.total_patrimonio_ontem);
+  const diffDia     = toFloat(t.diferenca_dia_patrimonio);
+  const diffDiaPct  = totalOntem > 0 ? (diffDia / totalOntem) * 100 : 0;
 
   const corDiff = corVar(diff);
+  const corDiffDia = corVar(diffDia);
 
   const pctVariacao  = aportado > 0 ? Math.abs(diff) / aportado * 100 : 0;
   const pctAportado  = Math.max(100 - pctVariacao, 0);
@@ -1362,6 +1431,12 @@ function CardPatrimonio({ totais, evolucao, onEditarEvolucao }) {
               label={`Variação (${pctVariacao.toFixed(1)}%)`}
               value={`${sinal(diff)}${fmtBRL(diff)}`}
               valueColor={corDiff}
+              plain
+            />
+            <ListRow
+              label="Variação do dia"
+              value={`${sinalCompleto(diffDia)}${fmtBRL(Math.abs(diffDia))} (${sinalCompleto(diffDiaPct)}${Math.abs(diffDiaPct).toFixed(2)}%)`}
+              valueColor={corDiffDia}
               plain
             />
             <ListRow
@@ -1497,8 +1572,12 @@ function CardResumoInvestimentos({ totais }) {
   const total    = CLASSES_ATIVOS.reduce((acc, c) => acc + toFloat(t[`total_${c.sufixo}`]), 0);
   const aportado = CLASSES_ATIVOS.reduce((acc, c) => acc + toFloat(t[`total_aportado_${c.sufixo}`]), 0);
   const diff     = CLASSES_ATIVOS.reduce((acc, c) => acc + toFloat(t[`diferenca_${c.sufixo}`]), 0);
+  const totalOntem = toFloat(t.total_investimentos_ontem);
+  const diffDia     = toFloat(t.diferenca_dia_investimentos);
+  const diffDiaPct  = totalOntem > 0 ? (diffDia / totalOntem) * 100 : 0;
 
   const corDiff = corVar(diff);
+  const corDiffDia = corVar(diffDia);
 
   const pctVariacao = aportado > 0 ? Math.abs(diff) / aportado * 100 : 0;
   const pctAportado = Math.max(100 - pctVariacao, 0);
@@ -1525,6 +1604,12 @@ function CardResumoInvestimentos({ totais }) {
               label={`Variação (${pctVariacao.toFixed(1)}%)`}
               value={`${sinal(diff)}${fmtBRL(diff)}`}
               valueColor={corDiff}
+              plain
+            />
+            <ListRow
+              label="Variação do dia"
+              value={`${sinalCompleto(diffDia)}${fmtBRL(Math.abs(diffDia))} (${sinalCompleto(diffDiaPct)}${Math.abs(diffDiaPct).toFixed(2)}%)`}
+              valueColor={corDiffDia}
               plain
             />
             <ListRow
@@ -2030,12 +2115,15 @@ function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = n
   const ta    = toFloat(ativo.total_atual);
   const vt    = toFloat(ativo.variacao_total);
   const vpct  = toFloat(ativo.variacao_percentual);
+  const vd    = toFloat(ativo.variacao_dia);
+  const vdpct = toFloat(ativo.variacao_dia_percentual);
   const pmeta = toFloat(ativo.porcentagem_meta);
   const pat   = toFloat(ativo.porcentagem_atual);
   const psf   = toFloat(ativo.porcentagem_sobrando_faltando);
 
   const textoSF = psf > 0 ? "Sobrando" : psf < 0 ? "Faltando" : "Ok";
   const s   = sinal(vt);
+  const sd  = sinalCompleto(vd);
   const ssf = sinalCompleto(psf);
 
   const metricas = soMeta
@@ -2046,6 +2134,7 @@ function CardAtivo({ ativo, highlight, soMeta = false, titulo = null, sortBy = n
       ]
     : [
         { titulo: "Cotação",         chave: null,                    valor: ehUSD ? fmtUSD(cot) : fmtBRL(cot), cor: null        },
+        { titulo: "Variação do dia", chave: "variacao_dia",          valor: `${sd}${fmtBRL(Math.abs(vd))} (${sd}${Math.abs(vdpct).toFixed(2)}%)`, cor: corVar(vd) },
         { titulo: "Quantidade",      chave: null,                    valor: String(qtd),                         cor: null        },
         { titulo: "Preço médio",     chave: null,                    valor: ehUSD ? fmtUSD(pm) : fmtBRL(pm),   cor: null        },
         { titulo: "Total investido", chave: null,                    valor: fmtBRL(ti),                          cor: null        },
@@ -2179,6 +2268,9 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
   const total    = toFloat(t[`total_${sufixo}`]);
   const aportado = toFloat(t[`total_aportado_${sufixo}`]);
   const diff     = toFloat(t[`diferenca_${sufixo}`]);
+  const totalOntem = toFloat(t[`total_ontem_${sufixo}`]);
+  const diffDia     = toFloat(t[`diferenca_dia_${sufixo}`]);
+  const diffDiaPct  = totalOntem > 0 ? (diffDia / totalOntem) * 100 : 0;
 
   let df = (ativos ?? []).filter(a => String(a.classe).toLowerCase().trim() === classe);
   if (sortBy) {
@@ -2191,6 +2283,7 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
   }
 
   const corDiff = corVar(diff);
+  const corDiffDia = corVar(diffDia);
   const pctVariacao = aportado > 0 ? Math.abs(diff) / aportado * 100 : 0;
   const pctAportado = Math.max(100 - pctVariacao, 0);
 
@@ -2230,6 +2323,12 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
               label={`Variação (${pctVariacao.toFixed(1)}%)`}
               value={`${sinalCompleto(diff)}${fmtBRL(Math.abs(diff))}`}
               valueColor={corDiff}
+              plain
+            />
+            <ListRow
+              label="Variação do dia"
+              value={`${sinalCompleto(diffDia)}${fmtBRL(Math.abs(diffDia))} (${sinalCompleto(diffDiaPct)}${Math.abs(diffDiaPct).toFixed(2)}%)`}
+              valueColor={corDiffDia}
               plain
             />
             <ListRow
@@ -2277,6 +2376,129 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
             {df.map((at, i) => <CardAtivo key={i} ativo={at} highlight={at.ticker === highlightTicker} sortBy={sortBy} onEditar={onEditarAtivo} />)}
           </div>
         </div>
+      </Expandable>
+    </Card>
+  );
+}
+
+function CardResumoCotacoes({ ativos }) {
+  if (!ativos?.length) return null;
+
+  const totalHoje  = ativos.reduce((s, a) => s + toFloat(a.total_atual), 0);
+  const totalOntem = ativos.reduce((s, a) => s + toFloat(a.total_atual_ontem), 0);
+  const variacaoDia = totalHoje - totalOntem;
+  const variacaoDiaPercentual = totalOntem > 0 ? (variacaoDia / totalOntem) * 100 : 0;
+
+  const emAlta  = ativos.filter(a => toFloat(a.variacao_cotacao) > 0).length;
+  const emBaixa = ativos.filter(a => toFloat(a.variacao_cotacao) < 0).length;
+
+  const corDiff = corVar(variacaoDia);
+
+  return (
+    <Card>
+      <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
+        <h2 className="card-titulo"><IconeCard nome="cotacoes" />Cotações</h2>
+      </SubCard>
+
+      <SubCard>
+        <div className="list-row list-row-plain" style={{ marginTop: "calc(var(--space-4) * -1)" }}>
+          <div className="list-row-left">
+            <span className="list-row-label">Carteira hoje</span>
+          </div>
+          <div className="list-row-right">
+            <span className="list-row-value">{fmtBRL(totalHoje)}</span>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2)" }}>
+          <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
+            <ListRow
+              label="Variação no dia"
+              value={`${sinalCompleto(variacaoDia)}${fmtBRL(Math.abs(variacaoDia))} (${sinalCompleto(variacaoDiaPercentual)}${Math.abs(variacaoDiaPercentual).toFixed(2)}%)`}
+              valueColor={corDiff}
+              plain
+            />
+            <ListRow
+              label="Ativos em alta / baixa"
+              value={`${emAlta} / ${emBaixa}`}
+              plain
+            />
+          </div>
+        </div>
+      </SubCard>
+    </Card>
+  );
+}
+
+function LinhaCotacao({ ativo }) {
+  const ehUSD = CLASSES_EM_DOLAR.includes(String(ativo.classe).toLowerCase().trim());
+  const formatar = ehUSD ? fmtUSD : fmtBRL;
+
+  const cotacao      = toFloat(ativo.cotacao);
+  const variacao      = toFloat(ativo.variacao_cotacao);
+  const variacaoPct   = toFloat(ativo.variacao_cotacao_percentual);
+  const cor = corVar(variacao);
+  const s   = sinalCompleto(variacao);
+
+  const link = linkGoogleFinance(ativo.ticker, ativo.classe);
+
+  const abrirNoGoogleFinance = () => {
+    if (link) window.open(link, "_blank", "noopener,noreferrer");
+  };
+
+  return (
+    <div
+      className="list-row list-row-plain list-row-clickable"
+      id={`cotacao-${ativo.ticker}`}
+      onClick={abrirNoGoogleFinance}
+      title={`Ver ${String(ativo.ticker).toUpperCase()} no Google Finance`}
+    >
+      <div className="list-row-left" style={{ gap: "var(--space-3)" }}>
+        <LogoAtivo ticker={ativo.ticker} size={36} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+          <span className="list-row-label">{String(ativo.ticker).toUpperCase()}</span>
+          <span className="list-row-tag">{ativo.nome}</span>
+        </div>
+      </div>
+      <div className="list-row-right">
+        <div className="list-row-values">
+          <span className="list-row-value">{formatar(cotacao)}</span>
+          <span className="list-row-sub" style={{ color: cor, fontSize: 13, fontWeight: 600 }}>
+            {s}{formatar(Math.abs(variacao))} ({s}{Math.abs(variacaoPct).toFixed(2)}%)
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CardCotacoesClasse({ titulo, sufixo, classe, ativos }) {
+  const [open, setOpen] = useState(false);
+
+  const df = (ativos ?? [])
+    .filter(a => String(a.classe).toLowerCase().trim() === classe)
+    .sort((a, b) => String(a.ticker).localeCompare(String(b.ticker)));
+
+  if (!df.length) return null;
+
+  return (
+    <Card>
+      <div className="card-header">
+        <SubCard className="subcard-titulo" style={{ width: "fit-content" }}>
+          <h2 className="card-titulo">
+            <IconeCard nome={ICONE_POR_SUFIXO[sufixo]} />{titulo}
+            <span className="card-titulo-contador">{df.length}</span>
+          </h2>
+        </SubCard>
+        <BotaoVer onClick={() => setOpen(o => !o)} open={open} />
+      </div>
+
+      <Expandable open={open}>
+        <SubCard>
+          <div style={{ marginTop: "calc(var(--space-4) * -1)", marginBottom: "calc(var(--space-4) * -1)" }}>
+            {df.map((a, i) => <LinhaCotacao key={i} ativo={a} />)}
+          </div>
+        </SubCard>
       </Expandable>
     </Card>
   );
@@ -3220,6 +3442,24 @@ export default function App() {
                     scrollRef={scrollRef}
                     onEditarAtivo={abrirEdicaoAtivo}
                     onAdicionarAtivo={abrirNovoAtivo}
+                  />
+                </div>
+              ))}
+            </>
+          )}
+
+          {pagina === "cotacoes" && (
+            <>
+              <div id="sec-resumo-cotacoes">
+                <CardResumoCotacoes ativos={ativos.filter(a => CLASSES_ATIVOS.some(c => c.classe === a.classe))} />
+              </div>
+              {CLASSES_ATIVOS.map(c => (
+                <div id={`sec-cotacao-${c.sufixo}`} key={c.classe}>
+                  <CardCotacoesClasse
+                    titulo={c.titulo}
+                    sufixo={c.sufixo}
+                    classe={c.classe}
+                    ativos={ativos}
                   />
                 </div>
               ))}
