@@ -251,6 +251,15 @@ const CLASSES_EM_DOLAR = ["stock", "reit", "etf"];
 
 const NOVO_ATIVO_MARCADOR = "__novo_ativo__";
 
+// Cotação do dólar usada para converter os ativos em dólar (stocks, reits, etfs)
+// para reais. Vem da linha "dolar" da planilha (mesma fonte usada em montarAtivos).
+function calcularTaxaDolar(ativosPlanilha) {
+  const linhaMoeda = (ativosPlanilha ?? []).find(
+    row => String(row.ticker ?? "").trim().toLowerCase() === "dolar"
+  );
+  return linhaMoeda ? toFloat(linhaMoeda.cotacao) : 1;
+}
+
 // Busca os dados extras de um ativo (dadosLocais.ativos) por ticker, ignorando
 // maiúsculas/minúsculas — compatível com chaves antigas salvas em maiúsculo.
 function buscarExtraAtivo(ativosExtra, ticker) {
@@ -266,10 +275,7 @@ function buscarExtraAtivo(ativosExtra, ticker) {
 
 function montarAtivos(ativosPlanilha, dadosLocais) {
 
-  const linhaMoeda = (ativosPlanilha ?? []).find(
-    row => String(row.ticker ?? "").trim().toLowerCase() === "dolar"
-  );
-  const taxaDolar = linhaMoeda ? toFloat(linhaMoeda.cotacao) : 1;
+  const taxaDolar = calcularTaxaDolar(ativosPlanilha);
 
   const tickersDaPlanilha = new Set(
     (ativosPlanilha ?? [])
@@ -328,7 +334,7 @@ function montarAtivos(ativosPlanilha, dadosLocais) {
   });
 }
 
-function calcularTotais(ativos, reservaAtual) {
+function calcularTotais(ativos, reservaAtual, taxaDolar) {
   const t = {};
   let totalInvestimentos = 0;
   let aportadoInvestimentos = 0;
@@ -349,6 +355,7 @@ function calcularTotais(ativos, reservaAtual) {
   t.total_patrimonio             = totalPatrimonio;
   t.total_aportado               = aportadoPatrimonio;
   t.total_diferenca_patrimonio   = totalPatrimonio - aportadoPatrimonio;
+  t.total_patrimonio_usd         = taxaDolar > 0 ? totalPatrimonio / taxaDolar : 0;
 
   return [t];
 }
@@ -1308,8 +1315,9 @@ function CardPatrimonio({ totais, evolucao, onEditarEvolucao }) {
 
   if (!totais?.length) return null;
   const t = totais[0];
-  const aportado = toFloat(t.total_aportado);
-  const diff     = toFloat(t.total_diferenca_patrimonio);
+  const aportado  = toFloat(t.total_aportado);
+  const diff      = toFloat(t.total_diferenca_patrimonio);
+  const totalUSD  = toFloat(t.total_patrimonio_usd);
 
   const corDiff = corVar(diff);
 
@@ -1343,6 +1351,10 @@ function CardPatrimonio({ totais, evolucao, onEditarEvolucao }) {
             <span className="list-row-value">{fmtBRL(total)}</span>
           </div>
         </div>
+
+        {!!totalUSD && (
+          <ListRow label="Atual em USD" value={fmtUSD(totalUSD)} plain />
+        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
           <div style={{ marginBottom: "calc(var(--space-4) * -1)" }}>
@@ -3152,7 +3164,8 @@ export default function App() {
   );
 
   const ativos    = montarAtivos(dadosPlanilha.ativos, dadosLocais);
-  const totais    = calcularTotais(ativos, dadosLocais.reserva_atual);
+  const taxaDolar = calcularTaxaDolar(dadosPlanilha.ativos);
+  const totais    = calcularTotais(ativos, dadosLocais.reserva_atual, taxaDolar);
   const alocacao  = calcularAlocacao(totais, dadosLocais.reserva_atual, dadosLocais.metas);
   const reservas  = [{ reserva_atual: dadosLocais.reserva_atual }];
 
