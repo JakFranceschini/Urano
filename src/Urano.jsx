@@ -53,7 +53,7 @@ const CLASSES_ATIVOS = [
 
 const ALOCACAO_CLASSES = [
   ...CLASSES_ATIVOS.map(({ sufixo, titulo }) => ({ sufixo, titulo })),
-  { sufixo: "reservas", titulo: "Reservas" },
+  { sufixo: "reservas", titulo: "Reserva" },
 ];
 
 const PAGINAS = [
@@ -824,12 +824,15 @@ function Expandable({ open, children }) {
       if (open) {
         el.style.height = "auto";
         el.style.opacity = "1";
+        el.style.marginTop = "0px";
+        el.style.marginBottom = "0px";
       } else {
         el.style.height = "0px";
         el.style.opacity = "0";
+        const gap = getParentGap(el);
+        el.style.marginTop = `-${gap / 2}px`;
+        el.style.marginBottom = `-${gap / 2}px`;
       }
-      el.style.marginTop = "0px";
-      el.style.marginBottom = "0px";
       return;
     }
 
@@ -1818,7 +1821,7 @@ function CardAporte({ ativos, alocacao }) {
     { classe: "fii",     nome: "Fiis"     },
     { classe: "etf",     nome: "Etfs"     },
     { classe: "bitcoin", nome: "Bitcoins" },
-    { classe: "reserva", nome: "Reservas" },
+    { classe: "reserva", nome: "Reserva" },
   ];
 
   const deficits = ORDEM.map(({ classe, nome }) => {
@@ -2356,7 +2359,7 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
       <Expandable open={open}>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-4)" }}>
 
-          <div className="dropdown-wrap">
+          <div className="dropdown-wrap filtro-botao-mobile">
             <BotaoFiltroTrigger
               open={filtrosOpen}
               onClick={() => setFiltrosOpen(o => !o)}
@@ -2384,6 +2387,21 @@ function CardClasse({ titulo, sufixo, classe, totais, ativos, selectedTicker, se
                 })}
               </div>
             )}
+          </div>
+
+          <div className="filtros-row filtro-botao-desktop">
+            {FILTROS.map(f => {
+              const ativo = sortBy === f.key;
+              return (
+                <BotaoFiltro
+                  key={f.key}
+                  ativo={ativo}
+                  onClick={() => handleSort(f.key)}
+                >
+                  {f.texto}
+                </BotaoFiltro>
+              );
+            })}
           </div>
           <div className="ativos-lista">
             {df.map((at, i) => <CardAtivo key={i} ativo={at} highlight={at.ticker === highlightTicker} sortBy={sortBy} onEditar={onEditarAtivo} />)}
@@ -3673,7 +3691,22 @@ function Style() {
         gap: var(--space-2);
         width: 100%;
       }
-      .navbar-left { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+      .navbar-left { display: flex; align-items: center; gap: var(--space-2); min-width: 0; cursor: default; }
+      .navbar-left img,
+      .navbar-left .navbar-logo {
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .navbar-left:hover img,
+      .navbar-left:hover .navbar-logo {
+        transform: scale(1.08);
+      }
+      .navbar-titulo {
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        display: inline-block;
+      }
+      .navbar-left:hover .navbar-titulo {
+        transform: scale(1.08);
+      }
       .navbar-right { display: flex; align-items: center; gap: var(--space-2); justify-self: end; min-width: 0; position: relative; }
 
             .btn-tema {
@@ -4460,9 +4493,19 @@ function Style() {
       }
       .filtros-row {
         display: flex;
-        gap: var(--space-4);
+        gap: var(--space-2);
         flex-wrap: wrap;
         padding-top: var(--space-1);
+      }
+      .filtros-row .btn-filtro-simples {
+        padding-left: 18px;
+        padding-right: 18px;
+      }
+      .filtro-botao-mobile { display: none; }
+      .filtro-botao-desktop { display: flex; }
+      @media (max-width: 640px) {
+        .filtro-botao-mobile { display: block; }
+        .filtro-botao-desktop { display: none; }
       }
 
             .ativos-lista { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -4867,14 +4910,14 @@ function Style() {
           width: calc(100% - 24px);
           padding: 18px 14px;
           box-sizing: border-box;
-          border-radius: 16px;
+          border-radius: 20px;
         }
         .navbar-titulo { font-size: 17px; }
 
                 .btn-topo-flutuante { bottom: 18px; right: 14px; width: 50px; height: 50px; }
         .btn-topo { font-size: 12px; padding: 5px 10px; }
 
-                .card        { padding: 18px !important; gap: var(--space-3); }
+                .card        { padding: 16px !important; gap: var(--space-3); }
         .card-titulo { font-size: 16px; }
         .card-header { gap: var(--space-2); }
 
@@ -4902,8 +4945,8 @@ function Style() {
 
             @media (max-width: 400px) {
         .main { padding: 105px 10px 34px; gap: var(--space-4); }
-        .card        { padding: var(--space-4) !important; gap: var(--space-4); }
-        .subcard     { padding: 14px !important; gap: var(--space-2); }
+        .card        { padding: 13px !important; gap: var(--space-4); }
+        .subcard     { padding: 12px !important; gap: var(--space-2); }
         .list-row    { --row-pad-x: 14px; }
         .list-row-plain { --row-pad-x: 0px; }
         .subcard-titulo { padding: var(--space-1) var(--space-3) !important; }
@@ -4922,8 +4965,8 @@ function Style() {
 
             @media (max-width: 340px) {
         .main    { padding: 78px var(--space-2) var(--space-7); gap: 10px; }
-        .card    { padding: 14px !important; gap: var(--space-2); }
-        .subcard { padding: var(--space-3) !important; gap: 6px; }
+        .card    { padding: 11px !important; gap: var(--space-2); }
+        .subcard { padding: 8px !important; gap: 6px; }
         .list-row { --row-pad-x: var(--space-3); }
         .list-row-plain { --row-pad-x: 0px; }
         .subcard-titulo { padding: var(--space-1) var(--space-2) !important; }
